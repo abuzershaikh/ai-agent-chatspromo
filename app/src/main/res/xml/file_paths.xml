@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Internal storage documents folder -->
+    <files-path name="documents" path="documents/" />
+    
+    <!-- Agent documents folder (AI Agent Document System) -->
+    <files-path name="agent_documents" path="agent_documents/" />
+    
+    <!-- Agent speech audio files (Voice Reply System) -->
+    <files-path name="agent_speech" path="agent_speech/" />
+    
+    <!-- Campaign media files -->
+    <files-path name="campaign_media" path="CampaignMedia/" />
+    
+    <!-- Product catalogue media files -->
+    <files-path name="product_media" path="product_media/" />
+
+    <!-- Status Auto Scheduled media files -->
+    <files-path name="status_scheduled" path="status_scheduled/" />
+
+    <!-- Status Scheduler media files -->
+    <files-path name="status_media" path="status_media/" />
+    
+    <!-- Payment QR code images -->
+    <files-path name="payment_qr_codes" path="payment_qr_codes/" />
+    
+    <!-- External storage for sharing -->
+    <external-path name="external_files" path="." />
+    
+    <!-- Cache directory for temporary files -->
+    <cache-path name="cache" path="." />
+</paths>

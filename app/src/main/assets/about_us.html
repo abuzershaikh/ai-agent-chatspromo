@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="hi">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <title>About — Bulkbox 360</title>
+        <style>
+            /* Basic clean styling */
+            :root{
+              --bg: #f8f9fb;
+              --card: #ffffff;
+              --accent: #0f172a;
+            }
+            body{
+              margin:0;
+              font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+              background:var(--bg);
+              color:var(--accent);
+              -webkit-font-smoothing:antialiased;
+              -moz-osx-font-smoothing:grayscale;
+              padding:24px;
+            }
+            .container{
+              max-width:780px;
+              margin:24px auto;
+              background:var(--card);
+              border-radius:12px;
+              box-shadow:0 6px 20px rgba(15,23,42,0.08);
+              padding:28px;
+            }
+            h1{
+              margin:0 0 12px 0;
+              font-size:28px;
+              font-weight:800; /* bold */
+              letter-spacing: -0.02em;
+              display:flex;
+              gap:12px;
+              align-items:center;
+            }
+            p.lead{
+              margin:8px 0 20px 0;
+              font-size:15px;
+              line-height:1.6;
+              font-weight:700; /* bold */
+            }
+
+            ul.features{
+              list-style:none;
+              padding:0;
+              margin:0 0 18px 0;
+              display:grid;
+              gap:12px;
+            }
+            ul.features li{
+              display:flex;
+              gap:12px;
+              align-items:flex-start;
+              padding:10px 12px;
+              border-radius:10px;
+              background:linear-gradient(180deg, rgba(15,23,42,0.02), rgba(15,23,42,0.01));
+              font-weight:700; /* bold for all feature text */
+            }
+            .emoji{
+              font-size:20px;
+              line-height:1;
+              width:36px;
+              height:36px;
+              display:inline-flex;
+              align-items:center;
+              justify-content:center;
+            }
+
+            .note{
+              margin-top:14px;
+              font-weight:700;
+              line-height:1.5;
+              font-size:14px;
+            }
+
+            .brand{
+              color:#0b63ff;
+              font-weight:900;
+            }
+
+            @media (max-width:520px){
+              .container{ padding:18px; }
+              h1{ font-size:22px; }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container" role="main" aria-labelledby="about-title">
+            <h1 id="about-title">
+                <span class="emoji">📣</span>
+                <span>Welcome to <span class="brand">Bulkbox 360</span></span>
+            </h1>
+
+            <p class="lead">
+                A powerful and easy-to-use bulk messaging app designed to simplify your communication needs.
+            </p>
+
+            <ul class="features">
+                <li>
+                    <span class="emoji">📂</span>
+                    <span><strong>Send messages directly from Excel &amp; VCF sheets</strong> – import your contacts easily</span>
+                </li>
+
+                <li>
+                    <span class="emoji">📋</span>
+                    <span><strong>Extract contacts</strong> from your phone or files in just one tap</span>
+                </li>
+
+                <li>
+                    <span class="emoji">👀</span>
+                    <span><strong>Preview messages before sending</strong> – so you always know what’s being delivered</span>
+                </li>
+
+                <li>
+                    <span class="emoji">⚡</span>
+                    <span><strong>Send bulk messages instantly</strong> to hundreds of contacts</span>
+                </li>
+
+                <li>
+                    <span class="emoji">🔒</span>
+                    <span><strong>Enjoy a secure, reliable, and fast experience</strong></span>
+                </li>
+            </ul>
+
+
+
+            <p class="note">
+                With <strong>Bulkbox 360</strong>, messaging becomes <strong>smarter, faster, and simpler.</strong>
+            </p>
+        </div>
+    </body>
+</html>

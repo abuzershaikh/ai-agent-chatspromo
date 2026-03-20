@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "1003974305237",
+    "project_id": "mailtracker-demo",
+    "storage_bucket": "mailtracker-demo.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1003974305237:android:e1a1e4445540df54b9495c",
+        "android_client_info": {
+          "package_name": "com.message.bulksend"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1003974305237-tid2a3ff0ts87l6bnvqtuh12glso4prf.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.message.bulksend",
+            "certificate_hash": "0eae3be869459053006446677eeb9d0665c173d8"
+          }
+        },
+        {
+          "client_id": "1003974305237-mbuak0mq8td582en5j6sl1dj5purai0h.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCAC2UZEZPb2mh8db8PShwtrlroDCU4yeA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1003974305237-mbuak0mq8td582en5j6sl1dj5purai0h.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

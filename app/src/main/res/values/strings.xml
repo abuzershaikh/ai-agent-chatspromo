@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Chats promo</string>
+
+
+          <string name="accessibility_service_description">This service enables two features:\n\n1. Auto-send messages in WhatsApp campaigns\n2. Extract unsaved contact numbers from WhatsApp\n\nAll data stays on your device. No information is sent to any server.</string>
+
+</resources>

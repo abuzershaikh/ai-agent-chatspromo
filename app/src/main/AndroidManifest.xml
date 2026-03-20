@@ -1,0 +1,987 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- Permissions -->
+    <!-- Contacts Permission -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+
+    <!-- Storage Permissions for CSV/VCF export -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
+    <!-- Internet Permission -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Overlay Permission - Required for displaying overlay windows -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- Audio Recording Permission - Required for TableSheet Audio column -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- Accessibility Permission - Required for WhatsApp automation -->
+    <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- Notification Permission - Required for Android 13+ -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Foreground Service Permission - Required for scheduled campaigns -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+    <!-- Wake Lock Permission - Required for AlarmManager -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
+
+    <!-- Schedule Exact Alarm Permission - Required for Android 12+ -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+
+    <!-- Battery Optimization Permission - Required for reliable background execution -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+
+    <!-- Queries for WhatsApp packages -->
+    <queries>
+        <package android:name="com.whatsapp" />
+        <package android:name="com.whatsapp.w4b" />
+        <package android:name="com.instagram.android" />
+    </queries>
+
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@drawable/logo"
+        android:label="@string/app_name"
+        android:roundIcon="@drawable/logo"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.BulkSend">
+
+        <activity
+            android:name=".bulksend.sheetscampaign.SheetsendActivity"
+            android:exported="false" />
+        <activity
+            android:name=".bulksend.scheduledcampaign.ScheduleSendActivity"
+            android:exported="false" />
+        <activity
+            android:name=".bulksend.scheduledcampaign.ScheduledCampaignCreatorActivity"
+            android:exported="false" />
+        <activity
+            android:name=".bulksend.textmedia.TextmediaActivity"
+            android:exported="false" />
+        <activity
+            android:name=".bulksend.textcamp.BulktextActivity"
+            android:exported="false" />
+        <!-- Main Launcher Activity -->
+        <activity
+            android:name=".auth.AuthActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.BulkSend">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity> <!-- Other Activities -->
+        <activity
+            android:name=".support.WebViewActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true" />
+        <activity
+            android:name=".auth.UserProfileActivity"
+            android:exported="false" />
+        <activity
+            android:name=".auth.UserPreferencesActivity"
+            android:exported="false" />
+
+
+        <activity
+            android:name=".support.SupportActivity"
+            android:exported="false" />
+        <activity
+            android:name=".support.CustomerChatSupportActivity"
+            android:exported="true"
+            android:label="Chat Support">
+            <intent-filter>
+                <action android:name="OPEN_CHAT_SUPPORT" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".autorespond.statusscheduled.StatusSchedulerActivity"
+            android:exported="false"
+            android:label="Status Auto Scheduled" />
+        <activity
+            android:name=".autorespond.ai.ui.customai.CustomAIAgentActivity"
+            android:exported="false"
+            android:label="Custom AI Agent" />
+        <activity
+            android:name=".autorespond.ai.customtask.ui.AgentTaskActivity"
+            android:exported="false"
+            android:label="Agent Task" />
+        <activity
+            android:name=".autorespond.ai.customtask.ui.AgentTaskEditorActivity"
+            android:exported="false"
+            android:label="Agent Task Editor" />
+        <activity
+            android:name=".autorespond.ai.ui.customai.CustomBusinessDetailsActivity"
+            android:exported="false"
+            android:label="Business Knowledge" />
+        <activity
+            android:name=".anylatic.ReportlistActivity"
+            android:exported="false" />
+        <activity
+            android:name=".anylatic.MessagereportActivity"
+            android:exported="false" />
+        <activity
+            android:name=".contactmanager.ContactzActivity"
+            android:exported="false" />
+        <activity
+            android:name=".templates.TemplateActivity"
+            android:exported="false" />
+        <activity
+            android:name=".templates.CreateTemplateActivity"
+            android:exported="false" />
+        <activity
+            android:name=".bulksend.SelectActivity"
+            android:exported="false" />
+        <activity
+            android:name=".contactmanager.DetailActivity"
+            android:exported="false" />
+        <activity
+            android:name=".autorespond.NotificationDebugActivity"
+            android:exported="false" />
+        <activity
+            android:name=".bulksend.ContactSelectActivity"
+            android:exported="false" />
+        <activity
+            android:name=".bulksend.ExcludeSentActivity"
+            android:exported="false" />
+        <activity
+            android:name=".bulksend.OneTimeActivity"
+            android:exported="false" />
+        <activity
+            android:name=".bulksend.BulksendActivity"
+            android:exported="false" />
+        <activity
+            android:name=".bulksend.BulkMessage1Activity"
+            android:exported="false" />
+        <activity
+            android:name=".bulksend.AutonomousBulkSendActivity"
+            android:exported="false"
+            android:label="AI Autonomous Sender" />
+        <activity
+            android:name=".bulksend.AutonomousCampaignProgressActivity"
+            android:exported="false"
+            android:label="Campaign Progress" />
+        <activity
+            android:name=".bulksend.CampaignStatusActivity"
+            android:exported="false" />
+        <activity
+            android:name=".tutorial.FaqActivity"
+            android:exported="false" />
+        <activity
+            android:name=".tutorial.VideoTutorialActivity"
+            android:exported="false" />
+        <activity
+            android:name=".notes.TaskActivity"
+            android:exported="false"
+            android:label="My Tasks" />
+        <activity
+            android:name=".notes.NewNotesActivity"
+            android:exported="false"
+            android:label="Smart Notes" />
+        <activity
+            android:name=".notes.NoteEditorActivity"
+            android:exported="false"
+            android:label="Note Editor"
+            android:windowSoftInputMode="adjustResize" />
+        <activity
+            android:name=".waextract.TextExtractActivity"
+            android:exported="true"
+            android:label="WhatsApp Contact Extractor" />
+
+        <activity
+            android:name=".plan.PrepackActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".plan.PlansActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".plan.GetActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".plan.AutoReplyPlanActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".plan.CRMPlanActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".plan.AIAgentPlanActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".debug.SubscriptionDebugActivity"
+            android:exported="false"
+            android:label="Subscription Debug" />
+
+        <activity
+            android:name=".debug.NotificationTestActivity"
+            android:exported="false"
+            android:label="Notification Test" />
+
+        <activity
+            android:name=".backup.RestoreActivity"
+            android:exported="false"
+            android:label="Restore Data" />
+
+        <activity
+            android:name=".sync.SyncActivity"
+            android:exported="false"
+            android:label="Cloud Sync" />
+
+
+
+        <activity
+            android:name=".chatai.BusinessAIActivity"
+            android:exported="false"
+            android:label="Business AI" />
+
+
+
+        <activity
+            android:name=".autorespond.AutoRespondActivity"
+            android:exported="false"
+            android:label="Auto Respond" />
+
+        <activity
+            android:name=".autorespond.keywordreply.KeywordReplyActivity"
+            android:exported="false"
+            android:label="Keyword Reply" />
+
+        <activity
+            android:name=".autorespond.menureply.MenuReplyActivity"
+            android:exported="false"
+            android:label="Menu Reply" />
+
+        <activity
+            android:name=".autorespond.welcomemessage.WelcomeMessageActivity"
+            android:exported="false"
+            android:label="Welcome Message" />
+
+        <activity
+            android:name=".autorespond.menureply.MenuReplySettingsActivity"
+            android:exported="false"
+            android:label="Menu Reply Settings" />
+
+        <activity
+            android:name=".autorespond.menureply.CreateMenuActivity"
+            android:exported="false"
+            android:label="Create Menu" />
+
+        <activity
+            android:name=".autorespond.menureply.MenuTreeViewActivity"
+            android:exported="false"
+            android:label="Menu Tree" />
+
+        <activity
+            android:name=".autorespond.menureply.SubmenuActivity"
+            android:exported="false"
+            android:label="Submenu" />
+
+        <activity
+            android:name=".autorespond.menureply.InfoMenuActivity"
+            android:exported="false"
+            android:label="Menu Guide" />
+
+        <activity
+            android:name=".autorespond.aireply.AIReplyActivity"
+            android:exported="false"
+            android:label="AI Reply" />
+
+        <activity
+            android:name=".autorespond.aireply.AIAutoReplyActivity"
+            android:exported="false"
+            android:label="AI Auto Reply" />
+
+        <activity
+            android:name=".autorespond.settings.PermissionSetupActivity"
+            android:exported="false"
+            android:label="Setup Auto Reply" />
+
+        <activity
+            android:name=".autorespond.ui.settings.AIAgentSettingsActivity"
+            android:exported="false"
+            android:label="AI Agent Settings" />
+
+        <activity
+            android:name=".autorespond.ui.settings.AIAgentTrainingActivity"
+            android:exported="false"
+            android:label="AI Agent Training" />
+
+        <activity
+            android:name=".aiagent.AIAgentDashboardActivity"
+            android:exported="false"
+            android:label="AI Agent Dashboard" />
+
+        <activity
+            android:name=".aiagent.tools.agentdocument.AgentDocumentActivity"
+            android:exported="false"
+            android:label="Agent Documents" />
+
+        <activity
+            android:name=".aiagent.tools.calendar.GoogleCalendarSetupActivity"
+            android:exported="false"
+            android:label="Google Calendar" />
+
+        <activity
+            android:name=".aiagent.tools.gmail.GoogleGmailSetupActivity"
+            android:exported="false"
+            android:label="Google Gmail" />
+
+        <activity
+            android:name=".aiagent.tools.shipping.CourierShippingActivity"
+            android:exported="false"
+            android:label="Courier Shipping" />
+
+        <activity
+            android:name=".aiagent.tools.shipping.ShiprocketSetupActivity"
+            android:exported="false"
+            android:label="Shiprocket Setup" />
+
+        <activity
+            android:name=".aiagent.tools.shipping.ShiprocketOrdersActivity"
+            android:exported="false"
+            android:label="Shiprocket Orders" />
+
+        <activity
+            android:name=".aiagent.tools.delhivery.DelhiverySetupActivity"
+            android:exported="false"
+            android:label="Delhivery Setup" />
+
+        <activity
+            android:name=".aiagent.tools.delhivery.DelhiveryOrdersActivity"
+            android:exported="false"
+            android:label="Delhivery Orders" />
+
+        <activity
+            android:name=".aiagent.tools.ecommerce.PaymentMethodActivity"
+            android:exported="false"
+            android:label="Payment Methods" />
+
+        <activity
+            android:name=".aiagent.tools.ecommerce.EcommerceToolsActivity"
+            android:exported="false"
+            android:label="E-commerce Hub" />
+
+        <activity
+            android:name=".aiagent.tools.woocommerce.WooCommerceSetupActivity"
+            android:exported="false"
+            android:label="WooCommerce Setup" />
+
+        <activity
+            android:name=".aiagent.tools.woocommerce.WooCommerceOrdersActivity"
+            android:exported="false"
+            android:label="WooCommerce Orders" />
+
+        <activity
+            android:name=".aiagent.tools.reverseai.ReverseAIActivity"
+            android:exported="false"
+            android:label="Reverse AI" />
+
+        <activity
+            android:name=".voicenotereply.VoiceNoteReplyActivity"
+            android:exported="false"
+            android:label="Voice Note Reply" />
+
+        <activity
+            android:name=".aiagent.tools.agentspeech.AgentSpeechActivity"
+            android:exported="false"
+            android:label="Agent Speech" />
+
+        <activity
+            android:name=".aiagent.tools.agentform.AgentFormBuilderActivity"
+            android:exported="true"
+            android:label="Agent Form Builder" />
+
+        <activity
+            android:name=".aiagent.tools.agentform.AgentFormTemplatesActivity"
+            android:exported="true"
+            android:label="My Forms" />
+
+        <activity
+            android:name=".autorespond.ui.settings.AIPersonalityActivity"
+            android:exported="false"
+            android:label="AI Brain Config" />
+
+        <activity
+            android:name=".autorespond.ai.ui.templates.AITemplateSelectionActivity"
+            android:exported="false"
+            android:label="AI Templates" />
+
+        <activity
+            android:name=".autorespond.ai.ui.templates.ClinicConfigActivity"
+            android:exported="false"
+            android:label="Clinic Configuration" />
+
+        <activity
+            android:name=".autorespond.ui.catalogue.ProductCatalogueActivity"
+            android:exported="false"
+            android:label="Product Catalogue" />
+
+        <activity
+            android:name=".autorespond.aireply.AIParametersActivity"
+            android:exported="false"
+            android:label="AI Parameters" />
+
+        <activity
+            android:name=".autorespond.instareply.InstagramAutoReplyActivity"
+            android:exported="false"
+            android:label="Instagram Auto Reply" />
+
+        <activity
+            android:name=".autorespond.statusscheduled.StatusAutoScheduledActivity"
+            android:exported="false"
+            android:label="Status Auto Scheduled" />
+
+        <activity
+            android:name=".autorespond.instastats.InstagramStatsActivity"
+            android:exported="false"
+            android:label="Instagram Analytics" />
+
+        <activity
+            android:name=".autorespond.instastats.InstagramMessageLogsActivity"
+            android:exported="false"
+            android:label="Instagram Message Logs" />
+
+        <activity
+            android:name=".autorespond.smartlead.SmartLeadCaptureActivity"
+            android:exported="false"
+            android:label="Smart Auto Lead Capture" />
+
+        <activity
+            android:name=".autorespond.sheetreply.SpreadsheetReplyActivity"
+            android:exported="false"
+            android:label="Spreadsheet Reply" />
+
+        <activity
+            android:name=".autorespond.MessageLogsActivity"
+            android:exported="false"
+            android:label="Message Logs" />
+
+        <activity
+            android:name=".autorespond.settings.AutoReplySettingsActivity"
+            android:exported="false"
+            android:label="Auto Reply Settings" />
+
+        <activity
+            android:name=".autorespond.backup.AutoRespondBackupActivity"
+            android:exported="false"
+            android:label="Backup &amp; Restore" />
+
+        <activity
+            android:name=".autorespond.settings.ExcludeNumberActivity"
+            android:exported="false"
+            android:label="Exclude Numbers" />
+
+        <activity
+            android:name=".autorespond.documentreply.DocumentReplyActivity"
+            android:exported="false"
+            android:label="Document Reply" />
+
+        <activity
+            android:name=".leadmanager.LeadManagerActivity"
+            android:exported="false"
+            android:label="Lead Manager" />
+
+        <activity
+            android:name=".leadmanager.importlead.ImportLeadActivity"
+            android:exported="false"
+            android:label="Import Leads" />
+
+        <activity
+            android:name=".leadmanager.sync.CRMSyncActivity"
+            android:exported="false"
+            android:label="CRM Cloud Sync" />
+
+
+
+        <activity
+            android:name=".tools.ToolsActivity"
+            android:exported="false"
+            android:label="Tools" />
+
+        <activity
+            android:name=".tools.fileopener.TextFileViewerActivity"
+            android:exported="false"
+            android:label="Text Viewer" />
+
+        <activity
+            android:name=".tools.fileopener.ImageViewerActivity"
+            android:exported="false"
+            android:label="Image Viewer" />
+
+        <activity
+            android:name=".tools.fileopener.AudioPlayerActivity"
+            android:exported="false"
+            android:label="Audio Player" />
+
+        <activity
+            android:name=".tools.fileopener.VideoPlayerActivity"
+            android:exported="false"
+            android:label="Video Player" />
+
+        <activity
+            android:name=".tools.fileopener.FileOpenerActivity"
+            android:exported="true"
+            android:label="File Opener">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="text/markdown" />
+                <data android:mimeType="application/json" />
+                <data android:mimeType="application/xml" />
+                <data android:mimeType="text/xml" />
+                <data android:mimeType="application/x-yaml" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:mimeType="audio/*" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\\.txt" />
+                <data android:pathPattern=".*\\.log" />
+                <data android:pathPattern=".*\\.md" />
+                <data android:pathPattern=".*\\.json" />
+                <data android:pathPattern=".*\\.xml" />
+                <data android:pathPattern=".*\\.yaml" />
+                <data android:pathPattern=".*\\.yml" />
+                <data android:pathPattern=".*\\.jpg" />
+                <data android:pathPattern=".*\\.jpeg" />
+                <data android:pathPattern=".*\\.png" />
+                <data android:pathPattern=".*\\.webp" />
+                <data android:pathPattern=".*\\.bmp" />
+                <data android:pathPattern=".*\\.heic" />
+                <data android:pathPattern=".*\\.heif" />
+                <data android:pathPattern=".*\\.gif" />
+                <data android:pathPattern=".*\\.mp3" />
+                <data android:pathPattern=".*\\.wav" />
+                <data android:pathPattern=".*\\.ogg" />
+                <data android:pathPattern=".*\\.m4a" />
+                <data android:pathPattern=".*\\.aac" />
+                <data android:pathPattern=".*\\.flac" />
+                <data android:pathPattern=".*\\.mp4" />
+                <data android:pathPattern=".*\\.mkv" />
+                <data android:pathPattern=".*\\.mov" />
+                <data android:pathPattern=".*\\.avi" />
+                <data android:pathPattern=".*\\.3gp" />
+                <data android:pathPattern=".*\\.webm" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".tools.leadform.LeadFormActivity"
+            android:exported="false"
+            android:label="Lead Forms" />
+
+        <activity
+            android:name=".tools.leadform.ui.LeadFormSheetsActivity"
+            android:exported="false"
+            android:label="Form Sheets" />
+
+        <activity
+            android:name=".tools.invoicemaker.InvoiceMakerActivity"
+            android:exported="false"
+            android:label="Invoice Maker" />
+
+        <activity
+            android:name=".tools.businesscard.BusinessCardActivity"
+            android:exported="false"
+            android:label="Business Card" />
+
+
+
+        <activity
+            android:name=".tablesheet.TableSheetActivity"
+            android:exported="true"
+            android:label="TableSheet">
+            <!-- Intent filters for opening CSV, Excel, and VCF files -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <!-- CSV files -->
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:mimeType="text/csv" />
+                <data android:mimeType="text/comma-separated-values" />
+                <data android:mimeType="application/csv" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <!-- Excel files -->
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:mimeType="application/vnd.ms-excel" />
+                <data android:mimeType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <!-- VCF/vCard files -->
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:mimeType="text/x-vcard" />
+                <data android:mimeType="text/vcard" />
+            </intent-filter>
+
+            <!-- File extensions based intent filters -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\\.csv" />
+                <data android:pathPattern=".*\\..*\\.csv" />
+                <data android:pathPattern=".*\\..*\\..*\\.csv" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\\.xlsx" />
+                <data android:pathPattern=".*\\..*\\.xlsx" />
+                <data android:pathPattern=".*\\..*\\..*\\.xlsx" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\\.xls" />
+                <data android:pathPattern=".*\\..*\\.xls" />
+                <data android:pathPattern=".*\\..*\\..*\\.xls" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\\.vcf" />
+                <data android:pathPattern=".*\\..*\\.vcf" />
+                <data android:pathPattern=".*\\..*\\..*\\.vcf" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".tablesheet.TableEditorActivity"
+            android:exported="false"
+            android:label="Table Editor" />
+
+        <activity
+            android:name=".userdetails.UserDetailsActivity"
+            android:exported="false"
+            android:label="User Details" />
+
+        <activity
+            android:name=".referral.ReferralActivity"
+            android:exported="false"
+            android:label="ChatsPromo Affiliate" />
+
+        <activity
+            android:name=".referral.AffiliateFunnelActivity"
+            android:exported="false"
+            android:label="Affiliate Funnel" />
+
+        <activity
+            android:name=".whatsappselect.WhatsAppSelectActivity"
+            android:exported="false"
+            android:label="Select WhatsApp" />
+
+        <!-- PDF Viewer Activity -->
+        <activity
+            android:name=".pdfviewer.PdfViewerActivity"
+            android:exported="true"
+            android:label="PDF Viewer">
+            <!-- Intent filter for opening PDF files -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <!-- PDF MIME type -->
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>
+
+            <!-- Intent filter for PDF file extensions -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\\.pdf" />
+                <data android:pathPattern=".*\\..*\\.pdf" />
+                <data android:pathPattern=".*\\..*\\..*\\.pdf" />
+            </intent-filter>
+
+            <!-- Intent filter for sharing PDF files -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>
+        </activity>
+
+        <!-- PDF List/Picker Activity -->
+        <activity
+            android:name=".pdfviewer.PdfListActivity"
+            android:exported="false"
+            android:label="PDF Viewer" />
+
+
+        <!-- FileProvider for sharing files -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.provider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- WhatsApp Auto Send Service - Accessibility Service -->
+        <service
+            android:name=".bulksend.WhatsAppAutoSendService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+        <!-- Overlay Service - Campaign Progress Overlay -->
+        <service
+            android:name=".overlay.OverlayService"
+            android:exported="false" />
+
+        <!-- WhatsApp & Instagram Unified Notification Listener Service -->
+        <service
+            android:name=".autorespond.WhatsAppNotificationListener"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!-- Scheduled Campaign Execution Service -->
+        <service
+            android:name=".scheduler.CampaignExecutionService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- Scheduled Campaign Receiver -->
+        <receiver
+            android:name=".scheduler.ScheduledCampaignReceiver"
+            android:exported="false" />
+
+        <!-- Autonomous Campaign Execution Service -->
+        <service
+            android:name=".bulksend.AutonomousCampaignExecutionService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- Autonomous Campaign Alarm Receiver -->
+        <receiver
+            android:name=".bulksend.AutonomousCampaignAlarmReceiver"
+            android:exported="false" />
+
+        <!-- Restore autonomous campaign alarms after reboot/update -->
+        <receiver
+            android:name=".bulksend.AutonomousCampaignRescheduleReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Status Scheduler Execution Service -->
+        <service
+            android:name=".autorespond.statusscheduled.StatusBatchExecutionService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- Status Scheduler Alarm Receiver -->
+        <receiver
+            android:name=".autorespond.statusscheduled.StatusBatchAlarmReceiver"
+            android:exported="false" />
+
+        <!-- Restore status scheduler alarms after reboot/update -->
+        <receiver
+            android:name=".autorespond.statusscheduled.StatusBatchRescheduleReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".leadmanager.notifications.LeadFollowUpNotificationReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".leadmanager.notifications.LeadFollowUpRescheduleReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Firebase Cloud Messaging Service -->
+        <service
+            android:name=".notification.ChatNotificationService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- LeadForm Background Sync Service -->
+        <service
+            android:name=".tools.leadform.sync.LeadFormBackgroundSyncService"
+            android:exported="false" />
+
+        <!-- Default notification channel metadata -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="chat_support_channel" />
+
+        <!-- Default notification icon -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
+
+        <!-- Default notification color -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/purple_500" />
+
+        <!-- Payment Verification Activity -->
+        <activity
+            android:name=".aiagent.tools.paymentverification.PaymentVerificationActivity"
+            android:exported="true"
+            android:theme="@style/Theme.BulkSend" />
+
+        <activity
+            android:name=".aiagent.tools.paymentverification.OwnerPaymentApprovalActivity"
+            android:exported="false"
+            android:theme="@style/Theme.BulkSend" />
+
+        <!-- Razorpay Config Activity -->
+        <activity
+            android:name=".aiagent.tools.ecommerce.RazorpayConfigActivity"
+            android:exported="true"
+            android:label="Razorpay Config" />
+
+        <!-- Google Sheets Integration Activity -->
+        <activity
+            android:name=".autorespond.tools.sheetconnect.SheetConnectSetupActivity"
+            android:exported="false"
+            android:label="Google Sheets Setup" />
+
+        <activity
+            android:name=".autorespond.tools.sheetconnect.SheetMappingActivity"
+            android:exported="true"
+            android:label="Configure Google Sheet Mappings" />
+
+    </application>
+
+</manifest>
