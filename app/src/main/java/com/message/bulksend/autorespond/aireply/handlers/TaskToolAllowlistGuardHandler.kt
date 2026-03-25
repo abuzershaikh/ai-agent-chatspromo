@@ -41,8 +41,8 @@ class TaskToolAllowlistGuardHandler(
             .filter { AgentTaskToolRegistry.isEnabledForTemplate(it, settingsManager) }
             .toMutableSet()
 
-        // WRITE_SHEET is default capability when global sheet-write switch is ON.
-        if (settingsManager.customTemplateEnableSheetWriteTool) {
+        // SHEET_SELECT/SHEET_AGG/WRITE_SHEET share this capability.
+        if (settingsManager.customTemplateEnableSheetWriteTool || settingsManager.customTemplateEnableSheetReadTool) {
             allowedTools.add(AgentTaskToolRegistry.WRITE_SHEET)
         }
 
@@ -51,6 +51,10 @@ class TaskToolAllowlistGuardHandler(
             if (tool.id !in allowedTools) {
                 sanitized = stripToolCommands(sanitized, tool.id)
             }
+        }
+
+        if (!settingsManager.customTemplateEnableSheetWriteTool) {
+            sanitized = stripWriteOnlySheetCommands(sanitized)
         }
         sanitized = cleanupResponse(sanitized)
 
@@ -101,7 +105,13 @@ class TaskToolAllowlistGuardHandler(
             }
 
             AgentTaskToolRegistry.WRITE_SHEET -> {
-                text.replace(Regex("\\[WRITE_SHEET:\\s*.+?\\]", RegexOption.IGNORE_CASE), "")
+                text
+                    .replace(Regex("\\[WRITE_SHEET:\\s*.+?\\]", RegexOption.IGNORE_CASE), "")
+                    .replace(Regex("\\[SHEET_SELECT:\\s*\\{[\\s\\S]*?\\}\\]", RegexOption.IGNORE_CASE), "")
+                    .replace(Regex("\\[SHEET_AGG:\\s*\\{[\\s\\S]*?\\}\\]", RegexOption.IGNORE_CASE), "")
+                    .replace(Regex("\\[SHEET_UPSERT:\\s*\\{[\\s\\S]*?\\}\\]", RegexOption.IGNORE_CASE), "")
+                    .replace(Regex("\\[SHEET_BULK_UPSERT:\\s*\\{[\\s\\S]*?\\}\\]", RegexOption.IGNORE_CASE), "")
+                    .replace(Regex("\\[SHEET_PIVOT:\\s*\\{[\\s\\S]*?\\}\\]", RegexOption.IGNORE_CASE), "")
             }
 
             AgentTaskToolRegistry.CATALOGUE_SEND -> {
@@ -123,6 +133,13 @@ class TaskToolAllowlistGuardHandler(
         return text
             .replace(Regex("\\n{3,}"), "\n\n")
             .trim()
+    }
+
+    private fun stripWriteOnlySheetCommands(text: String): String {
+        return text
+            .replace(Regex("\\[WRITE_SHEET:\\s*.+?\\]", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("\\[SHEET_UPSERT:\\s*\\{[\\s\\S]*?\\}\\]", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("\\[SHEET_BULK_UPSERT:\\s*\\{[\\s\\S]*?\\}\\]", RegexOption.IGNORE_CASE), "")
     }
 }
 

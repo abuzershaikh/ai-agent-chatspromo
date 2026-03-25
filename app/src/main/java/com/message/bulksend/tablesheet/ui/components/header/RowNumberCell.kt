@@ -1,7 +1,7 @@
 package com.message.bulksend.tablesheet.ui.components.header
 
 import androidx.compose.foundation.*
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -10,7 +10,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,10 +31,10 @@ fun RowNumberCell(
             .height(rowHeight.dp)
             .background(if (isSelected) Color(0xFF1565C0) else TableTheme.HEADER_BG)
             .border(1.dp, if (isSelected) Color(0xFF0D47A1) else TableTheme.GRID_COLOR)
-            .clickable { onSelect() }
-            .pointerInput(Unit) { 
-                detectTapGestures(onLongPress = { showMenu = true }) 
-            },
+            .combinedClickable(
+                onClick = onSelect,
+                onLongClick = { showMenu = true }
+            ),
         contentAlignment = Alignment.Center
     ) {
         Row(

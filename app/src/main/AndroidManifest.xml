@@ -81,20 +81,19 @@
             android:name=".auth.AuthActivity"
             android:exported="true"
             android:label="@string/app_name"
-            android:theme="@style/Theme.BulkSend">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity> <!-- Other Activities -->
+            android:theme="@style/Theme.BulkSend" /> <!-- Other Activities -->
         <activity
             android:name=".support.WebViewActivity"
             android:exported="false" />
 
         <activity
             android:name=".MainActivity"
-            android:exported="true" />
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
         <activity
             android:name=".auth.UserProfileActivity"
             android:exported="false" />

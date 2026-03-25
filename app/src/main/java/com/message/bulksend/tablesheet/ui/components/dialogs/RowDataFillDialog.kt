@@ -29,7 +29,7 @@ fun RowDataFillDialog(
     onDismiss: () -> Unit,
     onSave: (Map<Long, String>) -> Unit
 ) {
-    val formData = remember(rowId, columns) {
+    val formData = remember(rowId, columns, currentData) {
         mutableStateMapOf<Long, String>().apply {
             columns.forEach { column ->
                 val currentValue = currentData[Pair(rowId, column.id)] ?: ""
@@ -136,11 +136,15 @@ private fun RowDataField(
             value = value,
             onValueChange = onValueChange,
             modifier = Modifier.fillMaxWidth(),
+            singleLine = column.type != ColumnType.MULTILINE && column.type != ColumnType.JSON,
+            minLines = if (column.type == ColumnType.MULTILINE || column.type == ColumnType.JSON) 3 else 1,
             keyboardOptions = KeyboardOptions(
                 keyboardType = when (column.type) {
                     ColumnType.INTEGER -> KeyboardType.Number
+                    ColumnType.DECIMAL, ColumnType.AMOUNT -> KeyboardType.Decimal
                     ColumnType.PHONE -> KeyboardType.Phone
                     ColumnType.EMAIL -> KeyboardType.Email
+                    ColumnType.URL, ColumnType.FILE -> KeyboardType.Uri
                     else -> KeyboardType.Text
                 }
             ),

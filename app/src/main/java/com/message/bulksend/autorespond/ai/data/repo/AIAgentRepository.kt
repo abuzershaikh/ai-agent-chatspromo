@@ -94,11 +94,33 @@ class AIAgentRepository(
 
             val sanitizedPhone = sanitizePhone(phoneNumber)
             if (sanitizedPhone.isNotBlank()) {
-                rowIdsToSearch.addAll(cellDao.findRowIdsByValue(sanitizedPhone))
+                rowIdsToSearch.addAll(
+                    tableSheetRepository.searchRowIdsIndexed(
+                        tableIds = allowedTableIds.toList(),
+                        query = sanitizedPhone,
+                        limit = 120
+                    )
+                )
             }
 
             buildQueryTokens(query).forEach { token ->
-                rowIdsToSearch.addAll(cellDao.findRowIdsByValue(token))
+                rowIdsToSearch.addAll(
+                    tableSheetRepository.searchRowIdsIndexed(
+                        tableIds = allowedTableIds.toList(),
+                        query = token,
+                        limit = 120
+                    )
+                )
+            }
+
+            // Fallback for legacy data where search index is not populated yet.
+            if (rowIdsToSearch.isEmpty()) {
+                if (sanitizedPhone.isNotBlank()) {
+                    rowIdsToSearch.addAll(cellDao.findRowIdsByValue(sanitizedPhone))
+                }
+                buildQueryTokens(query).forEach { token ->
+                    rowIdsToSearch.addAll(cellDao.findRowIdsByValue(token))
+                }
             }
 
             if (rowIdsToSearch.isEmpty()) return emptyList()

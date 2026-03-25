@@ -28,6 +28,8 @@ fun TableDialogManager(
     // Column Manager
     showColumnManager: Boolean,
     onDismissColumnManager: () -> Unit,
+    onOpenNewColumnEditor: () -> Unit,
+    onEditColumnFromManager: (ColumnModel) -> Unit,
     columns: List<ColumnModel>,
     onReorderColumns: ((List<ColumnModel>) -> Unit)?,
     
@@ -36,6 +38,9 @@ fun TableDialogManager(
     onDismissSettingsSheet: () -> Unit,
     rowHeight: Float,
     onRowHeightChange: (Float) -> Unit,
+    columnCount: Int,
+    frozenColumnCount: Int,
+    onFrozenColumnCountChange: (Int) -> Unit,
     
     // Sheet Info
     showSheetInfo: Boolean,
@@ -54,7 +59,8 @@ fun TableDialogManager(
     // Row Data Fill Dialog
     showRowDataFillDialog: Boolean,
     onDismissRowDataFillDialog: () -> Unit,
-    fillDataRowId: Long?
+    fillDataRowId: Long?,
+    currentData: Map<Pair<Long, Long>, String>
 ) {
     // Add Rows Sheet
     if (showAddRowsSheet) {
@@ -113,11 +119,10 @@ fun TableDialogManager(
             onDismiss = onDismissColumnManager,
             onAddColumn = { 
                 onDismissColumnManager()
-                onDismissNewColumnEditor() // This will trigger the new column editor
+                onOpenNewColumnEditor()
             },
             onEditColumn = { column ->
-                onDismissColumnManager()
-                // Set the editing column - this would need to be handled by parent
+                onEditColumnFromManager(column)
             },
             onDeleteColumn = { columnId ->
                 onDeleteColumn(columnId)
@@ -133,6 +138,9 @@ fun TableDialogManager(
         TableSettingsSheet(
             rowHeight = rowHeight,
             onRowHeightChange = onRowHeightChange,
+            columnCount = columnCount,
+            frozenColumnCount = frozenColumnCount,
+            onFrozenColumnCountChange = onFrozenColumnCountChange,
             onDismiss = onDismissSettingsSheet
         )
     }
@@ -152,7 +160,7 @@ fun TableDialogManager(
         RowDataFillDialog(
             rowId = fillDataRowId,
             columns = columns,
-            currentData = emptyMap(), // This would need to be passed from parent
+            currentData = currentData,
             onDismiss = onDismissRowDataFillDialog,
             onSave = { rowData ->
                 rowData.forEach { (columnId, value) ->

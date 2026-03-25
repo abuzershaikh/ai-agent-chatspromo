@@ -42,7 +42,10 @@ fun DateCell(
     cellWidth: Dp,
     cellHeight: Dp,
     isRowSelected: Boolean = false,
-    onValueChange: (String) -> Unit
+    onValueChange: (String) -> Unit,
+    overrideBackgroundColor: Color? = null,
+    overrideTextColor: Color? = null,
+    overrideBorderColor: Color? = null
 ) {
     var showDatePicker by remember { mutableStateOf(false) }
     
@@ -60,6 +63,7 @@ fun DateCell(
     }
     
     val backgroundColor = when {
+        overrideBackgroundColor != null -> overrideBackgroundColor
         showDatePicker -> Color(0xFFE3F2FD)
         isRowSelected -> Color(0xFFE3F2FD).copy(alpha = 0.7f)
         else -> Color.White
@@ -70,7 +74,14 @@ fun DateCell(
             .width(cellWidth)
             .height(cellHeight)
             .background(backgroundColor)
-            .border(1.dp, if (showDatePicker) Color(0xFF2196F3) else TableTheme.GRID_COLOR)
+            .border(
+                1.dp,
+                when {
+                    showDatePicker -> Color(0xFF2196F3)
+                    overrideBorderColor != null -> overrideBorderColor
+                    else -> TableTheme.GRID_COLOR
+                }
+            )
             .clickable { showDatePicker = true },
         contentAlignment = Alignment.CenterStart
     ) {
@@ -81,7 +92,7 @@ fun DateCell(
         ) {
             Text(
                 text = displayDate,
-                color = Color(0xFF333333),
+                color = overrideTextColor ?: Color(0xFF333333),
                 fontSize = 12.sp,
                 maxLines = 1,
                 modifier = Modifier.weight(1f)
@@ -127,12 +138,171 @@ fun DateCell(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+fun DateTimeCell(
+    value: String,
+    cellWidth: Dp,
+    cellHeight: Dp,
+    isRowSelected: Boolean = false,
+    onValueChange: (String) -> Unit,
+    overrideBackgroundColor: Color? = null,
+    overrideTextColor: Color? = null,
+    overrideBorderColor: Color? = null
+) {
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
+    var pendingDateMillis by remember { mutableStateOf<Long?>(null) }
+
+    val timestamp = value.toLongOrNull() ?: parseFlexibleDateTime(value)
+    val displayValue =
+        if (timestamp != null) {
+            java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault())
+                .format(java.util.Date(timestamp))
+        } else {
+            value
+        }
+
+    val backgroundColor = when {
+        overrideBackgroundColor != null -> overrideBackgroundColor
+        showDatePicker || showTimePicker -> Color(0xFFE3F2FD)
+        isRowSelected -> Color(0xFFE3F2FD).copy(alpha = 0.7f)
+        else -> Color.White
+    }
+
+    Box(
+        modifier = Modifier
+            .width(cellWidth)
+            .height(cellHeight)
+            .background(backgroundColor)
+            .border(
+                1.dp,
+                when {
+                    showDatePicker || showTimePicker -> Color(0xFF2196F3)
+                    overrideBorderColor != null -> overrideBorderColor
+                    else -> TableTheme.GRID_COLOR
+                }
+            )
+            .clickable { showDatePicker = true },
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = displayValue,
+                color = overrideTextColor ?: Color(0xFF333333),
+                fontSize = 12.sp,
+                maxLines = 1,
+                modifier = Modifier.weight(1f)
+            )
+            if (displayValue.isBlank()) {
+                Icon(
+                    Icons.Default.Event,
+                    contentDescription = null,
+                    tint = Color(0xFFBDBDBD),
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+    }
+
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = timestamp ?: System.currentTimeMillis()
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingDateMillis = datePickerState.selectedDateMillis ?: System.currentTimeMillis()
+                    showDatePicker = false
+                    showTimePicker = true
+                }) { Text("Next") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+
+    if (showTimePicker) {
+        val seed = pendingDateMillis ?: timestamp ?: System.currentTimeMillis()
+        val calendar = java.util.Calendar.getInstance().apply { timeInMillis = seed }
+        val timePickerState = rememberTimePickerState(
+            initialHour = calendar.get(java.util.Calendar.HOUR_OF_DAY),
+            initialMinute = calendar.get(java.util.Calendar.MINUTE),
+            is24Hour = true
+        )
+        AlertDialog(
+            onDismissRequest = {
+                showTimePicker = false
+                pendingDateMillis = null
+            },
+            title = { Text("Select Time") },
+            text = { TimePicker(state = timePickerState) },
+            confirmButton = {
+                TextButton(onClick = {
+                    val baseDate = pendingDateMillis ?: System.currentTimeMillis()
+                    val merged = java.util.Calendar.getInstance().apply {
+                        timeInMillis = baseDate
+                        set(java.util.Calendar.HOUR_OF_DAY, timePickerState.hour)
+                        set(java.util.Calendar.MINUTE, timePickerState.minute)
+                        set(java.util.Calendar.SECOND, 0)
+                        set(java.util.Calendar.MILLISECOND, 0)
+                    }
+                    onValueChange(merged.timeInMillis.toString())
+                    showTimePicker = false
+                    pendingDateMillis = null
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showTimePicker = false
+                    pendingDateMillis = null
+                }) { Text("Cancel") }
+            }
+        )
+    }
+}
+
+private fun parseFlexibleDateTime(raw: String): Long? {
+    val token = raw.trim()
+    if (token.isBlank()) return null
+    val patterns =
+        listOf(
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm",
+            "dd/MM/yyyy HH:mm",
+            "MM/dd/yyyy HH:mm",
+            "yyyy-MM-dd'T'HH:mm:ss",
+            "yyyy-MM-dd'T'HH:mm"
+        )
+    patterns.forEach { pattern ->
+        runCatching {
+            java.text.SimpleDateFormat(pattern, java.util.Locale.getDefault()).apply {
+                isLenient = false
+            }.parse(token)
+        }.getOrNull()?.let { parsed ->
+            return parsed.time
+        }
+    }
+    return null
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 fun TimeCell(
     value: String,
     cellWidth: Dp,
     cellHeight: Dp,
     isRowSelected: Boolean = false,
-    onValueChange: (String) -> Unit
+    onValueChange: (String) -> Unit,
+    overrideBackgroundColor: Color? = null,
+    overrideTextColor: Color? = null,
+    overrideBorderColor: Color? = null
 ) {
     var showTimePicker by remember { mutableStateOf(false) }
     
@@ -156,6 +326,7 @@ fun TimeCell(
     }
     
     val backgroundColor = when {
+        overrideBackgroundColor != null -> overrideBackgroundColor
         showTimePicker -> Color(0xFFE3F2FD)
         isRowSelected -> Color(0xFFE3F2FD).copy(alpha = 0.7f)
         else -> Color.White
@@ -166,7 +337,14 @@ fun TimeCell(
             .width(cellWidth)
             .height(cellHeight)
             .background(backgroundColor)
-            .border(1.dp, if (showTimePicker) Color(0xFF2196F3) else TableTheme.GRID_COLOR)
+            .border(
+                1.dp,
+                when {
+                    showTimePicker -> Color(0xFF2196F3)
+                    overrideBorderColor != null -> overrideBorderColor
+                    else -> TableTheme.GRID_COLOR
+                }
+            )
             .clickable { showTimePicker = true },
         contentAlignment = Alignment.CenterStart
     ) {
@@ -177,7 +355,7 @@ fun TimeCell(
         ) {
             Text(
                 text = displayTime,
-                color = Color(0xFF333333),
+                color = overrideTextColor ?: Color(0xFF333333),
                 fontSize = 12.sp,
                 maxLines = 1,
                 modifier = Modifier.weight(1f)
@@ -236,7 +414,10 @@ fun AmountCell(
     cellWidth: Dp,
     cellHeight: Dp,
     isRowSelected: Boolean = false,
-    onValueChange: (String) -> Unit
+    onValueChange: (String) -> Unit,
+    overrideBackgroundColor: Color? = null,
+    overrideTextColor: Color? = null,
+    overrideBorderColor: Color? = null
 ) {
     var text by remember { mutableStateOf(value) }
     var isFocused by remember { mutableStateOf(false) }
@@ -248,6 +429,7 @@ fun AmountCell(
     val position = currencyOptions?.third ?: "left"
 
     val backgroundColor = when {
+        overrideBackgroundColor != null -> overrideBackgroundColor
         isFocused -> Color(0xFFE3F2FD)
         isRowSelected -> Color(0xFFE3F2FD).copy(alpha = 0.7f)
         else -> Color.White
@@ -258,7 +440,14 @@ fun AmountCell(
             .width(cellWidth)
             .height(cellHeight)
             .background(backgroundColor)
-            .border(1.dp, if (isFocused) Color(0xFF2196F3) else TableTheme.GRID_COLOR),
+            .border(
+                1.dp,
+                when {
+                    isFocused -> Color(0xFF2196F3)
+                    overrideBorderColor != null -> overrideBorderColor
+                    else -> TableTheme.GRID_COLOR
+                }
+            ),
         contentAlignment = Alignment.CenterStart
     ) {
         Row(
@@ -283,7 +472,7 @@ fun AmountCell(
                     onValueChange(filtered)
                 },
                 textStyle = TextStyle(
-                    color = Color(0xFF333333),
+                    color = overrideTextColor ?: Color(0xFF333333),
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium
                 ),

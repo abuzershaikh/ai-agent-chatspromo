@@ -47,7 +47,11 @@ fun TextInputCell(
     cellWidth: Dp,
     cellHeight: Dp,
     isRowSelected: Boolean = false,
-    onValueChange: (String) -> Unit
+    onValueChange: (String) -> Unit,
+    overrideBackgroundColor: Color? = null,
+    overrideTextColor: Color? = null,
+    overrideBorderColor: Color? = null,
+    singleLine: Boolean = true
 ) {
     var text by remember { mutableStateOf(value) }
     var isFocused by remember { mutableStateOf(false) }
@@ -55,6 +59,7 @@ fun TextInputCell(
     LaunchedEffect(value) { if (!isFocused) text = value }
     
     val backgroundColor = when {
+        overrideBackgroundColor != null -> overrideBackgroundColor
         isFocused -> Color(0xFFE3F2FD)
         isRowSelected -> Color(0xFFE3F2FD).copy(alpha = 0.7f)
         else -> Color.White
@@ -65,7 +70,14 @@ fun TextInputCell(
             .width(cellWidth)
             .height(cellHeight)
             .background(backgroundColor)
-            .border(1.dp, if (isFocused) Color(0xFF2196F3) else TableTheme.GRID_COLOR),
+            .border(
+                1.dp,
+                when {
+                    isFocused -> Color(0xFF2196F3)
+                    overrideBorderColor != null -> overrideBorderColor
+                    else -> TableTheme.GRID_COLOR
+                }
+            ),
         contentAlignment = Alignment.CenterStart
     ) {
         BasicTextField(
@@ -75,16 +87,18 @@ fun TextInputCell(
                 onValueChange(it)
             },
             textStyle = TextStyle(
-                color = Color(0xFF333333),
+                color = overrideTextColor ?: Color(0xFF333333),
                 fontSize = 13.sp
             ),
             cursorBrush = SolidColor(Color(0xFF2196F3)),
-            singleLine = true,
+            singleLine = singleLine,
             keyboardOptions = KeyboardOptions(
                 keyboardType = when (fieldType) {
                     ColumnType.INTEGER -> KeyboardType.Number
+                    ColumnType.DECIMAL, ColumnType.AMOUNT -> KeyboardType.Decimal
                     ColumnType.PHONE -> KeyboardType.Phone
                     ColumnType.EMAIL -> KeyboardType.Email
+                    ColumnType.URL, ColumnType.FILE -> KeyboardType.Uri
                     else -> KeyboardType.Text
                 }
             ),
@@ -104,12 +118,16 @@ fun SelectCell(
     cellWidth: Dp,
     cellHeight: Dp,
     isRowSelected: Boolean = false,
-    onValueChange: (String) -> Unit
+    onValueChange: (String) -> Unit,
+    overrideBackgroundColor: Color? = null,
+    overrideTextColor: Color? = null,
+    overrideBorderColor: Color? = null
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val options = column.selectOptions?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
+    val options = parseSelectOptions(column.selectOptions)
     
     val backgroundColor = when {
+        overrideBackgroundColor != null -> overrideBackgroundColor
         expanded -> Color(0xFFE3F2FD)
         isRowSelected -> Color(0xFFE3F2FD).copy(alpha = 0.7f)
         else -> Color.White
@@ -124,8 +142,15 @@ fun SelectCell(
                 .width(cellWidth)
                 .height(cellHeight)
                 .background(backgroundColor)
-                .border(1.dp, if (expanded) Color(0xFF2196F3) else TableTheme.GRID_COLOR)
-                .menuAnchor()
+                .border(
+                    1.dp,
+                    when {
+                        expanded -> Color(0xFF2196F3)
+                        overrideBorderColor != null -> overrideBorderColor
+                        else -> TableTheme.GRID_COLOR
+                    }
+                )
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true)
                 .clickable { expanded = true },
             contentAlignment = Alignment.CenterStart
         ) {
@@ -138,7 +163,7 @@ fun SelectCell(
             ) {
                 Text(
                     text = value,
-                    color = Color(0xFF333333),
+                    color = overrideTextColor ?: Color(0xFF333333),
                     fontSize = 12.sp,
                     maxLines = 1,
                     modifier = Modifier.weight(1f)
@@ -175,11 +200,14 @@ fun CheckboxCell(
     cellWidth: Dp,
     cellHeight: Dp,
     isRowSelected: Boolean = false,
-    onValueChange: (String) -> Unit
+    onValueChange: (String) -> Unit,
+    overrideBackgroundColor: Color? = null,
+    overrideBorderColor: Color? = null
 ) {
     val isChecked = value.equals("true", ignoreCase = true)
     
     val backgroundColor = when {
+        overrideBackgroundColor != null -> overrideBackgroundColor
         isRowSelected -> Color(0xFFE3F2FD).copy(alpha = 0.7f)
         else -> Color.White
     }
@@ -189,7 +217,7 @@ fun CheckboxCell(
             .width(cellWidth)
             .height(cellHeight)
             .background(backgroundColor)
-            .border(1.dp, TableTheme.GRID_COLOR)
+            .border(1.dp, overrideBorderColor ?: TableTheme.GRID_COLOR)
             .clickable { onValueChange(if (isChecked) "false" else "true") },
         contentAlignment = Alignment.Center
     ) {
@@ -207,9 +235,22 @@ fun EmailCell(
     cellWidth: Dp,
     cellHeight: Dp,
     isRowSelected: Boolean = false,
-    onValueChange: (String) -> Unit
+    onValueChange: (String) -> Unit,
+    overrideBackgroundColor: Color? = null,
+    overrideTextColor: Color? = null,
+    overrideBorderColor: Color? = null
 ) {
-    TextInputCell(value, ColumnType.EMAIL, cellWidth, cellHeight, isRowSelected, onValueChange)
+    TextInputCell(
+        value = value,
+        fieldType = ColumnType.EMAIL,
+        cellWidth = cellWidth,
+        cellHeight = cellHeight,
+        isRowSelected = isRowSelected,
+        onValueChange = onValueChange,
+        overrideBackgroundColor = overrideBackgroundColor,
+        overrideTextColor = overrideTextColor,
+        overrideBorderColor = overrideBorderColor
+    )
 }
 
 @Composable
@@ -219,12 +260,16 @@ fun PriorityCell(
     cellWidth: Dp,
     cellHeight: Dp,
     isRowSelected: Boolean = false,
-    onValueChange: (String) -> Unit
+    onValueChange: (String) -> Unit,
+    overrideBackgroundColor: Color? = null,
+    overrideTextColor: Color? = null,
+    overrideBorderColor: Color? = null
 ) {
     var expanded by remember { mutableStateOf(false) }
     val selectedOption = priorityOptions.find { it.name == value }
     
     val backgroundColor = when {
+        overrideBackgroundColor != null -> overrideBackgroundColor
         expanded -> Color(0xFFE3F2FD)
         isRowSelected -> Color(0xFFE3F2FD).copy(alpha = 0.7f)
         else -> Color.White
@@ -235,7 +280,7 @@ fun PriorityCell(
             .width(cellWidth)
             .height(cellHeight)
             .background(backgroundColor)
-            .border(1.dp, selectedOption?.color ?: TableTheme.GRID_COLOR)
+            .border(1.dp, overrideBorderColor ?: selectedOption?.color ?: TableTheme.GRID_COLOR)
             .clickable { expanded = true },
         contentAlignment = Alignment.CenterStart
     ) {
@@ -259,7 +304,7 @@ fun PriorityCell(
                     Spacer(Modifier.width(6.dp))
                     Text(
                         selectedOption.name,
-                        color = selectedOption.color,
+                        color = overrideTextColor ?: selectedOption.color,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
                         maxLines = 1
@@ -267,7 +312,7 @@ fun PriorityCell(
                 } else {
                     Text(
                         value,
-                        color = Color(0xFF333333),
+                        color = overrideTextColor ?: Color(0xFF333333),
                         fontSize = 12.sp,
                         maxLines = 1
                     )

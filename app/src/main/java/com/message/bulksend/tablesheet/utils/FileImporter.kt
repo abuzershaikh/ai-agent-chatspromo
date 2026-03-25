@@ -43,20 +43,15 @@ object FileImporter {
             
             val inputStream = connection.getInputStream()
             val reader = BufferedReader(InputStreamReader(inputStream))
-            
-            val lines = reader.readLines()
-            reader.close()
+            val records = reader.use { buffered -> parseCsvRecords(buffered) }
             inputStream.close()
-            
-            if (lines.isEmpty()) return@withContext null
-            
-            // First line as headers
-            val headers = parseCSVLine(lines[0])
-            
-            // Rest as data rows
-            val rows = lines.drop(1).mapNotNull { line ->
-                if (line.isNotBlank()) parseCSVLine(line) else null
-            }
+            if (records.isEmpty()) return@withContext null
+
+            val headers = sanitizeCsvHeader(records.first())
+            val rows =
+                records.drop(1).map { row ->
+                    if (row.size < headers.size) row + List(headers.size - row.size) { "" } else row
+                }.filter { row -> row.any { it.isNotBlank() } }
             
             val fileName = when {
                 url.contains("docs.google.com") -> "Google Sheet Import"
@@ -178,19 +173,15 @@ object FileImporter {
         try {
             val inputStream = context.contentResolver.openInputStream(uri) ?: return null
             val reader = BufferedReader(InputStreamReader(inputStream))
-            
-            val lines = reader.readLines()
-            if (lines.isEmpty()) return null
-            
-            // First line as headers
-            val headers = parseCSVLine(lines[0])
-            
-            // Rest as data rows
-            val rows = lines.drop(1).mapNotNull { line ->
-                if (line.isNotBlank()) parseCSVLine(line) else null
-            }
-            
-            reader.close()
+            val records = reader.use { buffered -> parseCsvRecords(buffered) }
+            inputStream.close()
+            if (records.isEmpty()) return null
+
+            val headers = sanitizeCsvHeader(records.first())
+            val rows =
+                records.drop(1).map { row ->
+                    if (row.size < headers.size) row + List(headers.size - row.size) { "" } else row
+                }.filter { row -> row.any { it.isNotBlank() } }
             
             return ImportedData(headers, rows, fileName, FileType.CSV)
         } catch (e: Exception) {
@@ -200,27 +191,84 @@ object FileImporter {
     }
     
     /**
-     * Parse CSV line handling quotes and commas
+     * RFC4180-style CSV parser with quoted multiline field support.
      */
-    private fun parseCSVLine(line: String): List<String> {
-        val result = mutableListOf<String>()
-        var current = StringBuilder()
+    private fun parseCsvRecords(reader: BufferedReader): List<List<String>> {
+        val records = mutableListOf<List<String>>()
+        var row = mutableListOf<String>()
+        val field = StringBuilder()
         var inQuotes = false
-        
-        for (i in line.indices) {
-            val char = line[i]
-            when {
-                char == '"' -> inQuotes = !inQuotes
-                char == ',' && !inQuotes -> {
-                    result.add(current.toString().trim())
-                    current = StringBuilder()
+
+        while (true) {
+            val codePoint = reader.read()
+            if (codePoint == -1) {
+                if (inQuotes) {
+                    // If quote isn't closed, treat remaining content as final field.
+                    inQuotes = false
                 }
-                else -> current.append(char)
+                if (field.isNotEmpty() || row.isNotEmpty()) {
+                    row.add(field.toString())
+                    records.add(row.toList())
+                }
+                break
+            }
+
+            val ch = codePoint.toChar()
+            if (inQuotes) {
+                if (ch == '"') {
+                    reader.mark(1)
+                    val next = reader.read()
+                    if (next == '"'.code) {
+                        field.append('"')
+                    } else {
+                        inQuotes = false
+                        if (next != -1) {
+                            reader.reset()
+                        }
+                    }
+                } else {
+                    field.append(ch)
+                }
+            } else {
+                when (ch) {
+                    '"' -> inQuotes = true
+                    ',' -> {
+                        row.add(field.toString())
+                        field.setLength(0)
+                    }
+                    '\r' -> {
+                        reader.mark(1)
+                        val next = reader.read()
+                        if (next != '\n'.code && next != -1) {
+                            reader.reset()
+                        }
+                        row.add(field.toString())
+                        field.setLength(0)
+                        records.add(row.toList())
+                        row = mutableListOf()
+                    }
+                    '\n' -> {
+                        row.add(field.toString())
+                        field.setLength(0)
+                        records.add(row.toList())
+                        row = mutableListOf()
+                    }
+                    else -> field.append(ch)
+                }
             }
         }
-        result.add(current.toString().trim())
-        
-        return result
+
+        return records
+    }
+
+    private fun sanitizeCsvHeader(headerRow: List<String>): List<String> {
+        if (headerRow.isEmpty()) return emptyList()
+        return headerRow.mapIndexed { index, token ->
+            token
+                .removePrefix("\uFEFF")
+                .trim()
+                .ifBlank { "Column ${index + 1}" }
+        }
     }
     
     /**

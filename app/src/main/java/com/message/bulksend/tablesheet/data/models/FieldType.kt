@@ -10,24 +10,29 @@ import androidx.compose.ui.graphics.vector.ImageVector
  * Based on Table Notes documentation
  */
 object FieldType {
-    const val TEXT = "STRING"
-    const val NUMBER = "INTEGER"
-    const val AMOUNT = "AMOUNT"
-    const val DATE = "DATEONLY"
-    const val TIME = "TIME"
-    const val CHECKBOX = "CHECKBOX"
-    const val SELECT = "SELECT"
-    const val PHONE = "PHONE"
-    const val EMAIL = "EMAIL"
-    const val IMAGE = "IMAGE"
-    const val LINK = "LINK"
-    const val DRAW = "DRAW"
-    const val AUDIO = "AUDIO"
-    const val MAP = "MAP"
-    const val FORMULA = "FORMULA"
-    const val URL = "URL"
-    const val MULTILINE = "MULTILINE"
-    const val PRIORITY = "PRIORITY"
+    const val TEXT = ColumnType.STRING
+    const val NUMBER = ColumnType.INTEGER
+    const val DECIMAL = ColumnType.DECIMAL
+    const val AMOUNT = ColumnType.AMOUNT
+    const val DATE = ColumnType.DATE
+    const val DATETIME = ColumnType.DATETIME
+    const val TIME = ColumnType.TIME
+    const val CHECKBOX = ColumnType.CHECKBOX
+    const val SELECT = ColumnType.SELECT
+    const val MULTI_SELECT = ColumnType.MULTI_SELECT
+    const val PHONE = ColumnType.PHONE
+    const val EMAIL = ColumnType.EMAIL
+    const val IMAGE = ColumnType.IMAGE
+    const val URL = ColumnType.URL
+    const val LINK = ColumnType.URL
+    const val DRAW = ColumnType.DRAW
+    const val AUDIO = ColumnType.AUDIO
+    const val MAP = ColumnType.MAP
+    const val FORMULA = ColumnType.FORMULA
+    const val FILE = ColumnType.FILE
+    const val JSON = ColumnType.JSON
+    const val MULTILINE = ColumnType.MULTILINE
+    const val PRIORITY = ColumnType.PRIORITY
 }
 
 /**
@@ -66,6 +71,14 @@ object FieldTypes {
             hasFormat = true
         ),
         FieldTypeConfig(
+            type = FieldType.DECIMAL,
+            name = "Decimal",
+            icon = Icons.Default.Numbers,
+            color = Color(0xFF059669),
+            description = "Decimal numeric values",
+            hasFormat = true
+        ),
+        FieldTypeConfig(
             type = FieldType.AMOUNT,
             name = "Amount",
             icon = Icons.Default.AttachMoney,
@@ -90,6 +103,14 @@ object FieldTypes {
             hasDateFormat = true
         ),
         FieldTypeConfig(
+            type = FieldType.DATETIME,
+            name = "Date & Time",
+            icon = Icons.Default.Event,
+            color = Color(0xFF7C3AED),
+            description = "Date-time picker",
+            hasDateFormat = true
+        ),
+        FieldTypeConfig(
             type = FieldType.CHECKBOX,
             name = "Checkbox",
             icon = Icons.Default.CheckBox,
@@ -102,6 +123,14 @@ object FieldTypes {
             icon = Icons.Default.ArrowDropDownCircle,
             color = Color(0xFF14B8A6),
             description = "Select from options",
+            hasOptions = true
+        ),
+        FieldTypeConfig(
+            type = FieldType.MULTI_SELECT,
+            name = "Multi Select",
+            icon = Icons.Default.FactCheck,
+            color = Color(0xFF0D9488),
+            description = "Select multiple options",
             hasOptions = true
         ),
         FieldTypeConfig(
@@ -133,6 +162,13 @@ object FieldTypes {
             description = "Web link"
         ),
         FieldTypeConfig(
+            type = FieldType.FILE,
+            name = "File",
+            icon = Icons.Default.AttachFile,
+            color = Color(0xFF2563EB),
+            description = "Document/file path"
+        ),
+        FieldTypeConfig(
             type = FieldType.MAP,
             name = "Location",
             icon = Icons.Default.LocationOn,
@@ -145,6 +181,20 @@ object FieldTypes {
             icon = Icons.Default.Notes,
             color = Color(0xFF7C3AED),
             description = "Multi-line text"
+        ),
+        FieldTypeConfig(
+            type = FieldType.JSON,
+            name = "JSON",
+            icon = Icons.Default.Code,
+            color = Color(0xFF4F46E5),
+            description = "Structured JSON text"
+        ),
+        FieldTypeConfig(
+            type = FieldType.FORMULA,
+            name = "Formula",
+            icon = Icons.Default.Functions,
+            color = Color(0xFF0284C7),
+            description = "Formula expression (=...)"
         ),
         FieldTypeConfig(
             type = FieldType.DRAW,

@@ -25,6 +25,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.message.bulksend.tablesheet.data.models.*
+import com.message.bulksend.tablesheet.ui.components.cells.parseSelectOptions
 
 private val HeaderBlue = Color(0xFF1976D2)
 
@@ -39,7 +40,7 @@ fun ColumnEditorScreen(
 ) {
     // Load existing values from column
     val existingOptions = remember(column) {
-        column?.selectOptions?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
+        parseSelectOptions(column?.selectOptions)
     }
     
     var columnName by remember(column) { mutableStateOf(column?.name ?: "") }
@@ -244,21 +245,21 @@ private fun PropertiesTab(
             Slider(
                 value = columnWidth,
                 onValueChange = onWidthChange,
-                valueRange = 0.5f..3f,
-                steps = 24,
+                valueRange = 0.5f..6f,
+                steps = 54,
                 colors = SliderDefaults.colors(
                     thumbColor = HeaderBlue,
                     activeTrackColor = HeaderBlue
                 ),
                 modifier = Modifier.weight(1f)
             )
-            IconButton(onClick = { if (columnWidth < 3f) onWidthChange(columnWidth + 0.1f) }) {
+            IconButton(onClick = { if (columnWidth < 6f) onWidthChange(columnWidth + 0.1f) }) {
                 Icon(Icons.Default.Add, "Increase", tint = HeaderBlue)
             }
         }
         
-        // Show options editor for SELECT type
-        if (selectedType == FieldType.SELECT) {
+        // Show options editor for SELECT types
+        if (selectedType == FieldType.SELECT || selectedType == FieldType.MULTI_SELECT) {
             Spacer(modifier = Modifier.height(24.dp))
             DropdownOptionsEditor(
                 options = selectOptions,
@@ -601,11 +602,36 @@ private fun PreviewTab(
                             Icon(Icons.Default.ArrowDropDown, null, tint = Color.Gray)
                         }
                     }
+                    FieldType.MULTI_SELECT -> {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AssistChip(
+                                onClick = {},
+                                label = { Text("Paid") },
+                                leadingIcon = { Icon(Icons.Default.Check, null) }
+                            )
+                            AssistChip(
+                                onClick = {},
+                                label = { Text("Priority") },
+                                leadingIcon = { Icon(Icons.Default.Check, null) }
+                            )
+                        }
+                    }
                     FieldType.DATE -> {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.CalendarMonth, null, tint = typeConfig.color, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("13/12/2025", color = Color(0xFF374151))
+                        }
+                    }
+                    FieldType.DATETIME -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Event, null, tint = typeConfig.color, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("13/12/2025 10:30", color = Color(0xFF374151))
                         }
                     }
                     FieldType.TIME -> {
@@ -629,6 +655,20 @@ private fun PreviewTab(
                             Text("example@email.com", color = Color(0xFF374151))
                         }
                     }
+                    FieldType.URL -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Link, null, tint = typeConfig.color, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("https://example.com", color = Color(0xFF1D4ED8))
+                        }
+                    }
+                    FieldType.MAP -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.LocationOn, null, tint = typeConfig.color, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("28.6139, 77.2090", color = Color(0xFF374151))
+                        }
+                    }
                     FieldType.IMAGE -> {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
@@ -648,6 +688,25 @@ private fun PreviewTab(
                     }
                     FieldType.NUMBER -> {
                         Text("12,345", color = Color(0xFF374151))
+                    }
+                    FieldType.DECIMAL -> {
+                        Text("1234.56", color = Color(0xFF374151))
+                    }
+                    FieldType.MULTILINE -> {
+                        Text("Line 1\nLine 2", color = Color(0xFF374151))
+                    }
+                    FieldType.JSON -> {
+                        Text("{\"status\":\"ok\"}", color = Color(0xFF374151))
+                    }
+                    FieldType.FILE -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.AttachFile, null, tint = typeConfig.color, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("/storage/docs/invoice.pdf", color = Color(0xFF374151))
+                        }
+                    }
+                    FieldType.FORMULA -> {
+                        Text("=CONCAT(A1,\" \",B1)", color = Color(0xFF0EA5E9), fontWeight = FontWeight.Medium)
                     }
                     FieldType.PRIORITY -> {
                         Row(verticalAlignment = Alignment.CenterVertically) {

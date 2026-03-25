@@ -11,6 +11,9 @@ interface RowDao {
     
     @Query("SELECT * FROM rows WHERE tableId = :tableId ORDER BY orderIndex ASC")
     suspend fun getRowsByTableIdSync(tableId: Long): List<RowModel>
+
+    @Query("SELECT * FROM rows WHERE tableId = :tableId AND id IN (:rowIds) ORDER BY orderIndex ASC")
+    suspend fun getRowsByTableIdAndIds(tableId: Long, rowIds: List<Long>): List<RowModel>
     
     @Query("SELECT * FROM rows WHERE id = :rowId")
     suspend fun getRowById(rowId: Long): RowModel?

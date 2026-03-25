@@ -56,7 +56,14 @@ class TableSheetActivity : ComponentActivity() {
             database.columnDao(),
             database.rowDao(),
             database.cellDao(),
-            database.folderDao()
+            database.folderDao(),
+            database.formulaDependencyDao(),
+            database.cellSearchIndexDao(),
+            database.rowVersionDao(),
+            database.sheetTransactionDao(),
+            database.filterViewDao(),
+            database.conditionalFormatRuleDao(),
+            database
         )
 
         // Ensure "AI Agent Data Sheet" folder exists (Pre-build)

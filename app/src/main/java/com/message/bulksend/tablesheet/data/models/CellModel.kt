@@ -21,12 +21,25 @@ import androidx.room.PrimaryKey
             onDelete = ForeignKey.CASCADE
         )
     ],
-    indices = [Index("rowId"), Index("columnId"), Index(value = ["rowId", "columnId"], unique = true)]
+    indices = [
+        Index("rowId"),
+        Index("columnId"),
+        Index("numberValue"),
+        Index("booleanValue"),
+        Index("dateValue"),
+        Index(value = ["rowId", "columnId"], unique = true)
+    ]
 )
 data class CellModel(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
     val rowId: Long,
     val columnId: Long,
-    val value: String = ""
+    val value: String = "",
+    val formula: String? = null,
+    val cachedValue: String? = null,
+    val numberValue: Double? = null,
+    val booleanValue: Boolean? = null,
+    val dateValue: Long? = null,
+    val updatedAt: Long = System.currentTimeMillis()
 )

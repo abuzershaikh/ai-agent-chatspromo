@@ -19,7 +19,14 @@ class GlobalReminderManager(private val context: Context) {
         database.columnDao(), 
         database.rowDao(), 
         database.cellDao(),
-        database.folderDao()
+        database.folderDao(),
+        database.formulaDependencyDao(),
+        database.cellSearchIndexDao(),
+        database.rowVersionDao(),
+        database.sheetTransactionDao(),
+        database.filterViewDao(),
+        database.conditionalFormatRuleDao(),
+        database
     )
 
     companion object {

@@ -193,4 +193,7 @@ dependencies {
     // Media3 for reliable video playback inside the file opener
     implementation("androidx.media3:media3-exoplayer:1.8.0")
     implementation("androidx.media3:media3-ui:1.8.0")
+
+    // ML Kit OCR (on-device)
+    implementation("com.google.mlkit:text-recognition:16.0.1")
 }

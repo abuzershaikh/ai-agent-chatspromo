@@ -2445,6 +2445,23 @@ class AIAgentContextBuilder(
                         }
                 }
 
+                if (settingsManager.customTemplateEnableSheetReadTool) {
+                        stringBuilder.append("[CUSTOM SHEET READ RULES]\n")
+                        stringBuilder.append(
+                                "For structured read operations you can use:\n"
+                        )
+                        stringBuilder.append(
+                                "[SHEET_SELECT: {\"table\":\"Agent Read Sheet\",\"where\":{\"Phone Number\":\"$senderPhone\"},\"columns\":[\"Name\",\"Phone Number\"],\"limit\":1}]\n"
+                        )
+                        stringBuilder.append(
+                                "[SHEET_AGG: {\"table\":\"Agent Read Sheet\",\"operation\":\"COUNTIF\",\"column\":\"Status\",\"criteria\":\"=PAID\"}]\n"
+                        )
+                        stringBuilder.append(
+                                "[SHEET_PIVOT: {\"table\":\"Agent Read Sheet\",\"groupBy\":\"Status\",\"operation\":\"COUNT\"}]\n"
+                        )
+                        stringBuilder.append("\n")
+                }
+
                 if (settingsManager.customTemplateEnableSheetWriteTool) {
                         stringBuilder.append("[CUSTOM SHEET WRITE RULES]\n")
                         stringBuilder.append("Write Mode: $writeMode\n")
@@ -2458,6 +2475,24 @@ class AIAgentContextBuilder(
                         )
                         stringBuilder.append(
                                 "[WRITE_SHEET: field1=value1; field2=value2]\n"
+                        )
+                        stringBuilder.append(
+                                "For structured table operations you can also use:\n"
+                        )
+                        stringBuilder.append(
+                                "[SHEET_SELECT: {\"table\":\"Agent Read Sheet\",\"where\":{\"Phone Number\":\"$senderPhone\"},\"columns\":[\"Name\",\"Phone Number\"],\"limit\":1}]\n"
+                        )
+                        stringBuilder.append(
+                                "[SHEET_AGG: {\"table\":\"Agent Write Sheet\",\"operation\":\"COUNTIF\",\"column\":\"Status\",\"criteria\":\"=PAID\"}]\n"
+                        )
+                        stringBuilder.append(
+                                "[SHEET_PIVOT: {\"table\":\"Agent Write Sheet\",\"groupBy\":\"Status\",\"operation\":\"COUNT\"}]\n"
+                        )
+                        stringBuilder.append(
+                                "[SHEET_UPSERT: {\"table\":\"Agent Write Sheet\",\"key\":{\"Phone Number\":\"$senderPhone\"},\"values\":{\"Last Intent\":\"order_status\"}}]\n"
+                        )
+                        stringBuilder.append(
+                                "[SHEET_BULK_UPSERT: {\"table\":\"Agent Write Sheet\",\"keyColumns\":[\"Phone Number\"],\"rows\":[{\"Phone Number\":\"$senderPhone\",\"Last Intent\":\"order_status\",\"Status\":\"ACTIVE\"}]}]\n"
                         )
                         if (writeMode == AIAgentSettingsManager.SHEET_WRITE_MODE_GOOGLE) {
                                 val targetGoogleSheet =
@@ -2799,7 +2834,7 @@ class AIAgentContextBuilder(
                                         )
                                 } else if (toolId == AgentTaskToolRegistry.WRITE_SHEET) {
                                         stringBuilder.append(
-                                                "- Write Sheet (${AgentTaskToolRegistry.WRITE_SHEET}) -> [WRITE_SHEET: key=value; key2=value2]\n"
+                                                "- Write Sheet (${AgentTaskToolRegistry.WRITE_SHEET}) -> [WRITE_SHEET: key=value; key2=value2] OR [SHEET_SELECT: {...}] / [SHEET_AGG: {...}] / [SHEET_PIVOT: {...}] / [SHEET_UPSERT: {...}] / [SHEET_BULK_UPSERT: {...}]\n"
                                         )
                                 }
                         }

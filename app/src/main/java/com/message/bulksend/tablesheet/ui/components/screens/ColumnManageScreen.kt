@@ -272,15 +272,6 @@ private fun DraggableColumnItem(
                 )
             }
             
-            // Visibility toggle
-            IconButton(onClick = { /* Toggle visibility */ }) {
-                Icon(
-                    Icons.Default.Visibility,
-                    contentDescription = "Toggle visibility",
-                    tint = Color.Gray
-                )
-            }
-            
             // Delete button
             IconButton(onClick = onDelete) {
                 Icon(

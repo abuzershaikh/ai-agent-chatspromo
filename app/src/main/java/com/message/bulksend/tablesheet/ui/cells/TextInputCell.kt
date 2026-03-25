@@ -54,8 +54,11 @@ fun TextInputCell(
             singleLine = true,
             keyboardOptions = KeyboardOptions(
                 keyboardType = when (columnType) {
-                    ColumnType.INTEGER, ColumnType.AMOUNT -> KeyboardType.Number
+                    ColumnType.INTEGER -> KeyboardType.Number
+                    ColumnType.DECIMAL, ColumnType.AMOUNT -> KeyboardType.Decimal
                     ColumnType.PHONE -> KeyboardType.Phone
+                    ColumnType.EMAIL -> KeyboardType.Email
+                    ColumnType.URL, ColumnType.FILE -> KeyboardType.Uri
                     else -> KeyboardType.Text
                 }
             ),

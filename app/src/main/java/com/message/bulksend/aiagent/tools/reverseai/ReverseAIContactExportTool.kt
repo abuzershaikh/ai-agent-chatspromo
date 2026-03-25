@@ -48,7 +48,14 @@ class ReverseAIContactExportTool(private val context: Context) {
         tableDatabase.columnDao(),
         tableDatabase.rowDao(),
         tableDatabase.cellDao(),
-        tableDatabase.folderDao()
+        tableDatabase.folderDao(),
+        tableDatabase.formulaDependencyDao(),
+        tableDatabase.cellSearchIndexDao(),
+        tableDatabase.rowVersionDao(),
+        tableDatabase.sheetTransactionDao(),
+        tableDatabase.filterViewDao(),
+        tableDatabase.conditionalFormatRuleDao(),
+        tableDatabase
     )
     private val globalSenderManager = GlobalSenderManager(context)
 

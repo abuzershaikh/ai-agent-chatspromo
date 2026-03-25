@@ -23,15 +23,23 @@ class AIService(private val context: Context) {
     private val businessDataManager = AIBusinessDataManager(context)
     private val aiAgentSettings = com.message.bulksend.autorespond.ai.settings.AIAgentSettingsManager(context)
     private val advancedSettings = com.message.bulksend.autorespond.ai.settings.AIAgentAdvancedSettings(context)
+    private val tableSheetDb = com.message.bulksend.tablesheet.data.TableSheetDatabase.getDatabase(context)
     private val aiAgentRepo = com.message.bulksend.autorespond.ai.data.repo.AIAgentRepository(
         context, 
         com.message.bulksend.autorespond.database.MessageDatabase.getDatabase(context).productDao(),
         com.message.bulksend.tablesheet.data.repository.TableSheetRepository(
-            com.message.bulksend.tablesheet.data.TableSheetDatabase.getDatabase(context).tableDao(),
-            com.message.bulksend.tablesheet.data.TableSheetDatabase.getDatabase(context).columnDao(),
-            com.message.bulksend.tablesheet.data.TableSheetDatabase.getDatabase(context).rowDao(),
-            com.message.bulksend.tablesheet.data.TableSheetDatabase.getDatabase(context).cellDao(),
-            com.message.bulksend.tablesheet.data.TableSheetDatabase.getDatabase(context).folderDao()
+            tableSheetDb.tableDao(),
+            tableSheetDb.columnDao(),
+            tableSheetDb.rowDao(),
+            tableSheetDb.cellDao(),
+            tableSheetDb.folderDao(),
+            tableSheetDb.formulaDependencyDao(),
+            tableSheetDb.cellSearchIndexDao(),
+            tableSheetDb.rowVersionDao(),
+            tableSheetDb.sheetTransactionDao(),
+            tableSheetDb.filterViewDao(),
+            tableSheetDb.conditionalFormatRuleDao(),
+            tableSheetDb
         )
     )
     private val aiAgentContextBuilder = com.message.bulksend.autorespond.ai.core.AIAgentContextBuilder(context, aiAgentRepo, aiAgentSettings)
@@ -53,6 +61,7 @@ class AIService(private val context: Context) {
         com.message.bulksend.autorespond.aireply.handlers.createTaskToolAllowlistGuardHandler(context), // Enforce per-step allowed tools
         com.message.bulksend.autorespond.aireply.handlers.DocumentDetectionHandler(com.message.bulksend.aiagent.tools.agentdocument.AgentDocumentAIIntegration(context)),
         com.message.bulksend.autorespond.aireply.handlers.PaymentDetectionHandler(com.message.bulksend.aiagent.tools.ecommerce.PaymentMethodAIIntegration(context)),
+        com.message.bulksend.autorespond.aireply.handlers.StructuredSheetCommandHandler(context),
         com.message.bulksend.autorespond.aireply.handlers.CustomSheetWriteHandler(context),
         com.message.bulksend.autorespond.aireply.handlers.createTaskStepCompletionHandler(context),
         com.message.bulksend.autorespond.aireply.handlers.AgentFormDetectionHandler(agentFormIntegration),
@@ -123,6 +132,9 @@ class AIService(private val context: Context) {
 
                 is com.message.bulksend.autorespond.aireply.handlers.CustomSheetWriteHandler ->
                     aiAgentSettings.customTemplateEnableSheetWriteTool
+
+                is com.message.bulksend.autorespond.aireply.handlers.StructuredSheetCommandHandler ->
+                    aiAgentSettings.customTemplateEnableSheetReadTool || aiAgentSettings.customTemplateEnableSheetWriteTool
                     
                 is com.message.bulksend.autorespond.aireply.handlers.CalendarEventHandler ->
                     aiAgentSettings.customTemplateEnableGoogleCalendarTool
@@ -153,6 +165,9 @@ class AIService(private val context: Context) {
                 is com.message.bulksend.autorespond.aireply.handlers.CustomSheetWriteHandler ->
                     true
 
+                is com.message.bulksend.autorespond.aireply.handlers.StructuredSheetCommandHandler ->
+                    true
+
                 is com.message.bulksend.autorespond.aireply.handlers.CatalogueDetectionHandler ->
                     com.message.bulksend.autorespond.ai.customtask.models.AgentTaskToolRegistry.CATALOGUE_SEND in stepAllowlist
 
@@ -180,6 +195,7 @@ class AIService(private val context: Context) {
             handler is com.message.bulksend.autorespond.aireply.handlers.TaskToolAllowlistGuardHandler ||
             handler is com.message.bulksend.autorespond.aireply.handlers.DocumentDetectionHandler ||
                 handler is com.message.bulksend.autorespond.aireply.handlers.PaymentDetectionHandler ||
+                handler is com.message.bulksend.autorespond.aireply.handlers.StructuredSheetCommandHandler ||
                 handler is com.message.bulksend.autorespond.aireply.handlers.CustomSheetWriteHandler ||
                 handler is com.message.bulksend.autorespond.aireply.handlers.TaskStepCompletionHandler ||
                 handler is com.message.bulksend.autorespond.aireply.handlers.AgentFormDetectionHandler ||
@@ -210,8 +226,8 @@ class AIService(private val context: Context) {
             }
             .toMutableSet()
 
-        // WRITE_SHEET remains default capability when sheet write tool is enabled in template settings.
-        if (aiAgentSettings.customTemplateEnableSheetWriteTool) {
+        // Sheet commands remain default capability when sheet read/write tools are enabled.
+        if (aiAgentSettings.customTemplateEnableSheetWriteTool || aiAgentSettings.customTemplateEnableSheetReadTool) {
             selectedStepTools.add(
                 com.message.bulksend.autorespond.ai.customtask.models.AgentTaskToolRegistry.WRITE_SHEET
             )

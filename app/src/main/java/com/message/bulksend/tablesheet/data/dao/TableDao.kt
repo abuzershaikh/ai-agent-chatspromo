@@ -11,6 +11,12 @@ interface TableDao {
     
     @Query("SELECT * FROM tables WHERE id = :tableId")
     suspend fun getTableById(tableId: Long): TableModel?
+
+    @Query("SELECT * FROM tables WHERE name = :name LIMIT 1")
+    suspend fun getTableByName(name: String): TableModel?
+
+    @Query("SELECT * FROM tables WHERE LOWER(TRIM(name)) = LOWER(TRIM(:name)) LIMIT 1")
+    suspend fun getTableByNameNormalized(name: String): TableModel?
     
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTable(table: TableModel): Long
@@ -29,6 +35,9 @@ interface TableDao {
     
     @Query("UPDATE tables SET columnCount = :count, updatedAt = :time WHERE id = :tableId")
     suspend fun updateColumnCount(tableId: Long, count: Int, time: Long = System.currentTimeMillis())
+
+    @Query("UPDATE tables SET frozenColumnCount = :count, updatedAt = :time WHERE id = :tableId")
+    suspend fun updateFrozenColumnCount(tableId: Long, count: Int, time: Long = System.currentTimeMillis())
     
     @Query("UPDATE tables SET tags = :tags, updatedAt = :time WHERE id = :tableId")
     suspend fun updateTags(tableId: Long, tags: String?, time: Long = System.currentTimeMillis())
@@ -57,6 +66,9 @@ interface TableDao {
     
     @Query("SELECT * FROM tables WHERE id = :tableId")
     fun getTableByIdSync(tableId: Long): TableModel?
+
+    @Query("SELECT * FROM tables ORDER BY updatedAt DESC")
+    suspend fun getAllTablesSync(): List<TableModel>
     
     @Query("SELECT COUNT(*) FROM rows WHERE tableId = :tableId")
     fun getRowCountSync(tableId: Long): Int

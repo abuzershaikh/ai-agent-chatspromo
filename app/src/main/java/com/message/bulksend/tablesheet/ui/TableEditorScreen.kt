@@ -1347,8 +1347,10 @@ private fun TextFieldInput(
         keyboardOptions = KeyboardOptions(
             keyboardType = when (fieldType) {
                 ColumnType.INTEGER -> KeyboardType.Number
+                ColumnType.DECIMAL, ColumnType.AMOUNT -> KeyboardType.Decimal
                 ColumnType.PHONE -> KeyboardType.Phone
                 ColumnType.EMAIL -> KeyboardType.Email
+                ColumnType.URL, ColumnType.FILE -> KeyboardType.Uri
                 else -> KeyboardType.Text
             }
         ),

@@ -20,6 +20,9 @@ import com.message.bulksend.tablesheet.ui.theme.TableTheme
 fun TableSettingsSheet(
     rowHeight: Float,
     onRowHeightChange: (Float) -> Unit,
+    columnCount: Int,
+    frozenColumnCount: Int,
+    onFrozenColumnCountChange: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
     ModalBottomSheet(
@@ -39,6 +42,59 @@ fun TableSettingsSheet(
                 color = Color(0xFF333333)
             )
             
+            Spacer(Modifier.height(24.dp))
+
+            Text(
+                "Frozen Columns",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF374151)
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "$frozenColumnCount of $columnCount columns",
+                fontSize = 14.sp,
+                color = Color.Gray
+            )
+            Spacer(Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = {
+                        if (frozenColumnCount > 0) {
+                            onFrozenColumnCountChange(frozenColumnCount - 1)
+                        }
+                    }
+                ) {
+                    Icon(Icons.Default.Remove, "Decrease frozen columns", tint = TableTheme.HEADER_BG)
+                }
+
+                Slider(
+                    value = frozenColumnCount.toFloat(),
+                    onValueChange = { onFrozenColumnCountChange(it.toInt()) },
+                    valueRange = 0f..columnCount.coerceAtLeast(0).toFloat(),
+                    steps = (columnCount - 1).coerceAtLeast(0),
+                    colors = SliderDefaults.colors(
+                        thumbColor = TableTheme.HEADER_BG,
+                        activeTrackColor = TableTheme.HEADER_BG
+                    ),
+                    modifier = Modifier.weight(1f)
+                )
+
+                IconButton(
+                    onClick = {
+                        if (frozenColumnCount < columnCount) {
+                            onFrozenColumnCountChange(frozenColumnCount + 1)
+                        }
+                    }
+                ) {
+                    Icon(Icons.Default.Add, "Increase frozen columns", tint = TableTheme.HEADER_BG)
+                }
+            }
+
             Spacer(Modifier.height(24.dp))
             
             // Row Height Section

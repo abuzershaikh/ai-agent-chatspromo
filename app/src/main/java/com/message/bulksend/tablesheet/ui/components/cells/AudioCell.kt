@@ -32,7 +32,9 @@ fun AudioCell(
     cellWidth: Dp,
     cellHeight: Dp,
     isRowSelected: Boolean = false,
-    onValueChange: (String) -> Unit
+    onValueChange: (String) -> Unit,
+    overrideBackgroundColor: Color? = null,
+    overrideBorderColor: Color? = null
 ) {
     val context = LocalContext.current
     var isRecording by remember { mutableStateOf(false) }
@@ -112,6 +114,7 @@ fun AudioCell(
     }
     
     val backgroundColor = when {
+        overrideBackgroundColor != null -> overrideBackgroundColor
         isRecording -> Color(0xFFFFEBEE)
         isRowSelected -> Color(0xFFE3F2FD).copy(alpha = 0.7f)
         else -> Color.White
@@ -122,7 +125,14 @@ fun AudioCell(
             .width(cellWidth)
             .height(cellHeight)
             .background(backgroundColor)
-            .border(1.dp, if (isRecording) Color(0xFFF43F5E) else TableTheme.GRID_COLOR),
+            .border(
+                1.dp,
+                when {
+                    isRecording -> Color(0xFFF43F5E)
+                    overrideBorderColor != null -> overrideBorderColor
+                    else -> TableTheme.GRID_COLOR
+                }
+            ),
         contentAlignment = Alignment.Center
     ) {
         Row(

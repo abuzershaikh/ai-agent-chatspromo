@@ -13,6 +13,7 @@ data class TableModel(
     val updatedAt: Long = System.currentTimeMillis(),
     val rowCount: Int = 0,
     val columnCount: Int = 0,
+    val frozenColumnCount: Int = 0,
     val tags: String? = null, // Comma separated tags
     val isFavorite: Boolean = false,
     val folderId: Long? = null // Folder ID for organization
