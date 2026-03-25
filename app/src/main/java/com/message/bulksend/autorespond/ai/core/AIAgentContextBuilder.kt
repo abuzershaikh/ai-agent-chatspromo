@@ -1,4 +1,4 @@
-﻿package com.message.bulksend.autorespond.ai.core
+package com.message.bulksend.autorespond.ai.core
 
 import android.content.Context
 import com.message.bulksend.autorespond.ai.customsheet.CustomTemplateSheetManager
@@ -11,6 +11,7 @@ import com.message.bulksend.autorespond.ai.customtask.models.AgentTaskToolRegist
 import com.message.bulksend.autorespond.ai.data.repo.AIAgentRepository
 import com.message.bulksend.autorespond.ai.data.model.UserProfile
 import com.message.bulksend.autorespond.ai.settings.AIAgentSettingsManager
+import com.message.bulksend.autorespond.ai.needdiscovery.NeedDiscoveryManager
 import com.message.bulksend.autorespond.database.AttributeGroup
 import com.message.bulksend.autorespond.database.AttributeOption
 import com.message.bulksend.autorespond.database.Product
@@ -32,6 +33,7 @@ class AIAgentContextBuilder(
         private val taskManager by lazy { AgentTaskManager(context) }
         private val taskEngine by lazy { AgentTaskEngine(taskManager) }
         private val taskOwnerAlertManager by lazy { AgentTaskOwnerAlertManager(context) }
+        private val needDiscoveryManager by lazy { NeedDiscoveryManager(context) }
 
         suspend fun buildContextPrompt(
                 senderName: String,
@@ -80,7 +82,7 @@ class AIAgentContextBuilder(
                                         )
                                 }
 
-                                appendCustomTemplateProfile(stringBuilder)
+                                appendCustomTemplateProfile(stringBuilder, senderPhone)
                                 appendCustomTemplateSheetContext(
                                         stringBuilder = stringBuilder,
                                         senderPhone = senderPhone,
@@ -2572,7 +2574,7 @@ class AIAgentContextBuilder(
                 val type: String = "Text"
         )
 
-        private fun appendCustomTemplateProfile(stringBuilder: StringBuilder) {
+                private fun appendCustomTemplateProfile(stringBuilder: StringBuilder, senderPhone: String) {
                 if (!isCustomTemplateActive()) return
 
                 val templateName =
@@ -2593,20 +2595,17 @@ class AIAgentContextBuilder(
                         stringBuilder.append("Custom Instructions:\n")
                         stringBuilder.append("$customInstructions\n")
                 }
+
                 val businessKnowledge =
                         com.message.bulksend.autorespond.ai.ui.customai.CustomBusinessKnowledgeCodec
                                 .fromJson(settingsManager.customTemplateBusinessKnowledgeJson)
                 if (businessKnowledge.hasContent()) {
                         stringBuilder.append("Business Knowledge:\n")
                         if (businessKnowledge.businessName.isNotBlank()) {
-                                stringBuilder.append(
-                                        "- Business Name: ${businessKnowledge.businessName}\n"
-                                )
+                                stringBuilder.append("- Business Name: ${businessKnowledge.businessName}\n")
                         }
                         if (businessKnowledge.userName.isNotBlank()) {
-                                stringBuilder.append(
-                                        "- Owner/User Name: ${businessKnowledge.userName}\n"
-                                )
+                                stringBuilder.append("- Owner/User Name: ${businessKnowledge.userName}\n")
                         }
                         if (businessKnowledge.businessDetails.isNotBlank()) {
                                 stringBuilder.append("- Business Details:\n")
@@ -2619,9 +2618,7 @@ class AIAgentContextBuilder(
                         if (faqItems.isNotEmpty()) {
                                 stringBuilder.append("- FAQs:\n")
                                 faqItems.forEachIndexed { index, faq ->
-                                        stringBuilder.append(
-                                                "  ${index + 1}. Q: ${faq.question}\n"
-                                        )
+                                        stringBuilder.append("  ${index + 1}. Q: ${faq.question}\n")
                                         stringBuilder.append("     A: ${faq.answer}\n")
                                 }
                         }
@@ -2629,6 +2626,39 @@ class AIAgentContextBuilder(
                                 "Use this business knowledge and FAQ data to answer side questions accurately before asking for more clarification.\n"
                         )
                 }
+
+                stringBuilder.append("Runtime Flags:\n")
+                stringBuilder.append(
+                        "- Native Tool Calling: ${if (settingsManager.customTemplateNativeToolCallingEnabled) "ON" else "OFF"}\n"
+                )
+                stringBuilder.append(
+                        "- Continuous Autonomous Mode: ${if (settingsManager.customTemplateContinuousAutonomousEnabled) "ON" else "OFF"}\n"
+                )
+                if (settingsManager.customTemplateContinuousAutonomousEnabled) {
+                        stringBuilder.append(
+                                "- Autonomous Silence Gap: ${settingsManager.customTemplateAutonomousSilenceGapMinutes}m\n"
+                        )
+                        stringBuilder.append(
+                                "- Autonomous Max Nudges/Day: ${settingsManager.customTemplateAutonomousMaxNudgesPerDay}\n"
+                        )
+                }
+
+                val needSnippet = needDiscoveryManager.buildContextSnippet(senderPhone)
+                if (needSnippet.isNotBlank()) {
+                        stringBuilder.append("\n")
+                        stringBuilder.append(needSnippet)
+                        stringBuilder.append("\n")
+                }
+
+                stringBuilder.append("Goal-First Conversation Rules:\n")
+                stringBuilder.append("- Primary objective is to move user toward goal naturally.\n")
+                stringBuilder.append(
+                        "- Steps are internal guidance for the agent, not scripted user-facing flow.\n"
+                )
+                stringBuilder.append(
+                        "- Reply human-like and ask at most one relevant clarification when needed.\n"
+                )
+
                 stringBuilder.append("Enabled Tools:\n")
                 stringBuilder.append(
                         "- Payment: ${if (settingsManager.customTemplateEnablePaymentTool) "ON" else "OFF"}\n"
@@ -2703,6 +2733,7 @@ class AIAgentContextBuilder(
                 }
 
                 val task = context.currentTask
+                val templateGoal = settingsManager.customTemplateGoal.trim()
                 var repeatGuardLimitReached = false
                 stringBuilder.append("[STEP FLOW TASK MODE]\n")
                 stringBuilder.append("Mode: STEP_FLOW\n")
@@ -2712,9 +2743,12 @@ class AIAgentContextBuilder(
                 if (task.goal.isNotBlank()) {
                         stringBuilder.append("Step Goal: ${task.goal}\n")
                 }
+                if (templateGoal.isNotBlank()) {
+                        stringBuilder.append("Primary Goal: $templateGoal\n")
+                }
                 stringBuilder.append("Step Instruction: ${task.instruction}\n")
                 if (task.followUpQuestion.isNotBlank()) {
-                        stringBuilder.append("Question To Ask: ${task.followUpQuestion}\n")
+                        stringBuilder.append("Suggested Clarifying Question (internal): ${task.followUpQuestion}\n")
                 }
 
                 if (settingsManager.customTemplateRepeatCounterEnabled) {
@@ -2895,23 +2929,38 @@ class AIAgentContextBuilder(
                 }
 
                 stringBuilder.append("Rules:\n")
-                stringBuilder.append("- Focus on current step and keep replies concise.\n")
-                stringBuilder.append("- If user asks side question, answer and then resume current step.\n")
+                stringBuilder.append("- Steps are internal planning state only. Never tell user step numbers, completion markers, or workflow status.\n")
+                stringBuilder.append("- Reply naturally and human-like while keeping responses concise.\n")
+                stringBuilder.append("- If user asks side question, answer first and then smoothly continue toward the goal.\n")
                 stringBuilder.append("- Step tool allowlist overrides general tool usage for this step.\n")
                 stringBuilder.append("- Use only tools listed under [STEP TOOL ALLOWLIST].\n")
                 stringBuilder.append("- Never output commands for tools not allowed in current step.\n")
                 stringBuilder.append(
-                        "- Decide step completion autonomously from conversation state, collected details, and explicit user confirmations.\n"
+                        "- Decide step completion from conversation state, collected details, and explicit confirmations.\n"
                 )
                 stringBuilder.append(
-                        "- Mark step complete only when required information for this step is available or user clearly confirms completion.\n"
+                        "- Use [TASK_STEP_COMPLETE:${task.stepOrder}] only as internal state marker and never expose it in user-facing text.\n"
                 )
-                stringBuilder.append(
-                        "- When current step is completed, include tag exactly once: [TASK_STEP_COMPLETE:${task.stepOrder}]\n"
-                )
-                stringBuilder.append("- Do not jump to next step without completion.\n\n")
+                stringBuilder.append("- Do not jump to next step until current step is truly complete.\n\n")
                 stringBuilder.append("- If a required field is AVAILABLE, treat it as pre-filled and do not ask again.\n")
                 stringBuilder.append("- Ask only for MISSING fields.\n\n")
+
+                if (context.currentStep >= context.totalSteps) {
+                        stringBuilder.append("[FINAL GOAL CHECK]\n")
+                        if (templateGoal.isNotBlank()) {
+                                stringBuilder.append("Primary Goal to verify: $templateGoal\n")
+                        }
+                        if (task.goal.isNotBlank()) {
+                                stringBuilder.append("Final Step Goal to verify: ${task.goal}\n")
+                        }
+                        stringBuilder.append(
+                                "Before marking final step complete, verify goal achievement from explicit user confirmation or clear evidence.\n"
+                        )
+                        stringBuilder.append(
+                                "If goal is not achieved yet, continue naturally with one focused question or tool action instead of closing.\n\n"
+                        )
+                }
+
                 if (repeatGuardLimitReached) {
                         stringBuilder.append(
                                 "- Repeat limit reached for this step. Avoid repeating same question; close or resolve the step decisively.\n\n"
@@ -3103,3 +3152,12 @@ class AIAgentContextBuilder(
                 return fields.toList()
         }
 }
+
+
+
+
+
+
+
+
+

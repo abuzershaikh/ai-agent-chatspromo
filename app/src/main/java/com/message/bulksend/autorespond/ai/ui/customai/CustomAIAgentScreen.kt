@@ -42,11 +42,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.message.bulksend.autorespond.ai.autonomous.AutonomousGoalRuntime
 import com.message.bulksend.autorespond.ai.customsheet.CustomTemplateSheetManager
 import com.message.bulksend.autorespond.ai.settings.AIAgentSettingsManager
 import com.message.bulksend.autorespond.tools.sheetconnect.SheetConnectSetupActivity
 import com.message.bulksend.autorespond.tools.sheetconnect.SheetConnectManager
 import com.message.bulksend.tablesheet.TableSheetActivity
+import com.message.bulksend.autorespond.ai.needdiscovery.ui.NeedDiscoveryActivity
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
@@ -81,6 +83,8 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
     val settingsManager = remember { AIAgentSettingsManager(context) }
     val sheetManager = remember { CustomTemplateSheetManager(context) }
     val sheetConnectManager = remember { SheetConnectManager(context) }
+
+    val autonomousRuntime = remember { AutonomousGoalRuntime(context) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -145,6 +149,18 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
     var googleGmailEnabled by rememberSaveable {
         mutableStateOf(settingsManager.customTemplateEnableGoogleGmailTool)
     }
+    var nativeToolCallingEnabled by rememberSaveable {
+        mutableStateOf(settingsManager.customTemplateNativeToolCallingEnabled)
+    }
+    var continuousAutonomousEnabled by rememberSaveable {
+        mutableStateOf(settingsManager.customTemplateContinuousAutonomousEnabled)
+    }
+    var autonomousSilenceGapMinutesText by rememberSaveable {
+        mutableStateOf(settingsManager.customTemplateAutonomousSilenceGapMinutes.toString())
+    }
+    var autonomousQueueSize by rememberSaveable { mutableStateOf(0) }
+    var autonomousLastHeartbeatAt by rememberSaveable { mutableStateOf(0L) }
+    var autonomousLastError by rememberSaveable { mutableStateOf("") }
 
     var sheetFolderName by rememberSaveable {
         mutableStateOf(settingsManager.customTemplateSheetFolderName)
@@ -197,6 +213,13 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
     val lifecycleOwner = LocalLifecycleOwner.current
 
     val resolvedTemplateName = templateName.trim().ifBlank { "Custom AI Template" }
+
+    fun refreshAutonomousStatus() {
+        val status = autonomousRuntime.getRuntimeStatus()
+        autonomousQueueSize = status.queueSize
+        autonomousLastHeartbeatAt = status.lastHeartbeatAt
+        autonomousLastError = status.lastError
+    }
 
     fun persistWriteFields() {
         val cleanFields =
@@ -477,6 +500,7 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
                         syncReferenceSheetOptions()
                         refreshGoogleConnectionSummary()
                     }
+                    refreshAutonomousStatus()
                 }
             }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -487,6 +511,10 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
         syncReferenceSheetOptions()
         refreshGoogleConnectionSummary()
         persistWriteFields()
+        refreshAutonomousStatus()
+        if (continuousAutonomousEnabled) {
+            autonomousRuntime.scheduleHeartbeat()
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -807,6 +835,42 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
                             onGoogleGmailEnabledChange = {
                                 googleGmailEnabled = it
                                 settingsManager.customTemplateEnableGoogleGmailTool = it
+                            },
+                            nativeToolCallingEnabled = nativeToolCallingEnabled,
+                            onNativeToolCallingEnabledChange = {
+                                nativeToolCallingEnabled = it
+                                settingsManager.customTemplateNativeToolCallingEnabled = it
+                            },
+                            continuousAutonomousEnabled = continuousAutonomousEnabled,
+                            onContinuousAutonomousEnabledChange = {
+                                continuousAutonomousEnabled = it
+                                settingsManager.customTemplateContinuousAutonomousEnabled = it
+                                if (it) {
+                                    val delayMinutes = autonomousSilenceGapMinutesText.toIntOrNull() ?: 2
+                                    settingsManager.customTemplateAutonomousSilenceGapMinutes = delayMinutes
+                                    autonomousSilenceGapMinutesText = delayMinutes.toString()
+                                    autonomousRuntime.scheduleHeartbeat()
+                                    autonomousRuntime.scheduleImmediateKick(delaySeconds = 5)
+                                } else {
+                                    autonomousRuntime.cancelHeartbeat()
+                                }
+
+                                refreshAutonomousStatus()
+                            },
+                            autonomousSilenceGapMinutesText = autonomousSilenceGapMinutesText,
+                            onAutonomousSilenceGapMinutesTextChange = { raw ->
+                                val filtered = raw.filter { ch -> ch.isDigit() }.take(4)
+                                autonomousSilenceGapMinutesText = filtered
+                                val parsed = filtered.toIntOrNull()
+                                if (parsed != null) {
+                                    settingsManager.customTemplateAutonomousSilenceGapMinutes = parsed
+                                }
+                            },
+                            runtimeQueueSize = autonomousQueueSize,
+                            runtimeLastHeartbeatAt = autonomousLastHeartbeatAt,
+                            runtimeLastError = autonomousLastError,
+                            onOpenNeedDiscovery = {
+                                context.startActivity(Intent(context, NeedDiscoveryActivity::class.java))
                             }
                         )
                 }
@@ -905,3 +969,15 @@ private fun buildWriteFieldSchemaJson(fields: List<CustomWriteFieldSpec>): Strin
     }
     return arr.toString()
 }
+
+
+
+
+
+
+
+
+
+
+
+

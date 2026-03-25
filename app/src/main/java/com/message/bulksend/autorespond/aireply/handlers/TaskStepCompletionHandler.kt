@@ -1,4 +1,4 @@
-package com.message.bulksend.autorespond.aireply.handlers
+﻿package com.message.bulksend.autorespond.aireply.handlers
 
 import android.content.Context
 import com.message.bulksend.autorespond.ai.customtask.engine.AgentTaskEngine
@@ -37,8 +37,6 @@ class TaskStepCompletionHandler(
         if (matches.isEmpty()) return HandlerResult(success = true)
 
         val actions = mutableListOf<String>()
-        var workflowCompleted = false
-
         matches.forEach { match ->
             val step = match.groupValues.getOrNull(1)?.toIntOrNull() ?: return@forEach
             val result = taskEngine.completeStep(phoneKey, step)
@@ -49,13 +47,10 @@ class TaskStepCompletionHandler(
                     "TASK_STEP_COMPLETE:$step:NEXT_${result.movedToStep ?: "NA"}"
                 }
             )
-            workflowCompleted = workflowCompleted || result.isWorkflowCompleted
+
         }
 
         var cleaned = response.replace(pattern, "").replace(Regex("\\n{3,}"), "\n\n").trim()
-        if (workflowCompleted && cleaned.isNotBlank()) {
-            cleaned = "$cleaned\n\nAll configured steps are completed."
-        }
 
         return HandlerResult(
             success = true,
@@ -76,4 +71,9 @@ fun createTaskStepCompletionHandler(context: Context): TaskStepCompletionHandler
         taskEngine = engine
     )
 }
+
+
+
+
+
 

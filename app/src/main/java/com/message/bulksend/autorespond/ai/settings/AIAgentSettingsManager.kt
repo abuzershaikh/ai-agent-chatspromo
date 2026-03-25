@@ -300,4 +300,52 @@ class AIAgentSettingsManager(context: Context) {
         set(value) = prefs.edit()
             .putBoolean("custom_template_enable_google_gmail_tool", value)
             .apply()
+    var customTemplateNativeToolCallingEnabled: Boolean
+        get() = prefs.getBoolean("custom_template_native_tool_calling_enabled", false)
+        set(value) = prefs.edit()
+            .putBoolean("custom_template_native_tool_calling_enabled", value)
+            .apply()
+
+    var customTemplateContinuousAutonomousEnabled: Boolean
+        get() = prefs.getBoolean("custom_template_continuous_autonomous_enabled", false)
+        set(value) = prefs.edit()
+            .putBoolean("custom_template_continuous_autonomous_enabled", value)
+            .apply()
+
+    var customTemplateAutonomousSilenceGapMinutes: Int
+        get() = prefs.getInt("custom_template_autonomous_silence_gap_minutes", 2)
+        set(value) = prefs.edit()
+            .putInt("custom_template_autonomous_silence_gap_minutes", value.coerceIn(1, 1440))
+            .apply()
+
+    var customTemplateAutonomousMaxNudgesPerDay: Int
+        get() = prefs.getInt("custom_template_autonomous_max_nudges_per_day", 2)
+        set(value) = prefs.edit()
+            .putInt("custom_template_autonomous_max_nudges_per_day", value.coerceAtLeast(1))
+            .apply()
+
+    var customTemplateAutonomousMaxRounds: Int
+        get() = prefs.getInt("custom_template_autonomous_max_rounds", 4)
+        set(value) = prefs.edit()
+            .putInt("custom_template_autonomous_max_rounds", value.coerceAtLeast(1))
+            .apply()
+
+    var customTemplateAutonomousMaxQueue: Int
+        get() = prefs.getInt("custom_template_autonomous_max_queue", 50)
+        set(value) = prefs.edit()
+            .putInt("custom_template_autonomous_max_queue", value.coerceAtLeast(1))
+            .apply()
+
+    var customTemplateAutonomousMaxGoalsPerRun: Int
+        get() = prefs.getInt("custom_template_autonomous_max_goals_per_run", 10)
+        set(value) = prefs.edit()
+            .putInt("custom_template_autonomous_max_goals_per_run", value.coerceAtLeast(1))
+            .apply()
+
+    var customTemplateNeedDiscoverySchemaJson: String
+        get() = prefs.getString("custom_template_need_discovery_schema_json", "") ?: ""
+        set(value) = prefs.edit()
+            .putString("custom_template_need_discovery_schema_json", value)
+            .apply()
 }
+

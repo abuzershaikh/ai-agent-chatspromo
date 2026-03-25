@@ -311,7 +311,7 @@ private fun TaskEditorScreen(
                                 fontSize = 17.sp
                         )
                         Text(
-                                "Configure title, prompt, question, and tool allowlist for this step.",
+                                "Configure step instruction, question flow, and final success-check goal.",
                                 color = Color(0xFFB4D8F0),
                                 fontSize = 13.sp
                         )
@@ -332,23 +332,6 @@ private fun TaskEditorScreen(
                                 onValueChange = { title = it },
                                 label = { Text("Step title") },
                                 singleLine = true,
-                                modifier = Modifier.fillMaxWidth(),
-                                colors =
-                                        OutlinedTextFieldDefaults.colors(
-                                                focusedBorderColor = Color(0xFF2563EB),
-                                                focusedLabelColor = Color(0xFF2563EB),
-                                                unfocusedBorderColor = Color(0xFF4B5563),
-                                                unfocusedLabelColor = Color(0xFF9CA3AF),
-                                                focusedTextColor = Color.White,
-                                                unfocusedTextColor = Color.White,
-                                                cursorColor = Color(0xFF2563EB)
-                                        ),
-                                shape = RoundedCornerShape(12.dp)
-                        )
-                        OutlinedTextField(
-                                value = goal,
-                                onValueChange = { goal = it },
-                                label = { Text("Goal (optional)") },
                                 modifier = Modifier.fillMaxWidth(),
                                 colors =
                                         OutlinedTextFieldDefaults.colors(
@@ -387,6 +370,26 @@ private fun TaskEditorScreen(
                                 label = { Text("Question to ask user (optional)") },
                                 minLines = 2,
                                 maxLines = 6,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors =
+                                        OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = Color(0xFF2563EB),
+                                                focusedLabelColor = Color(0xFF2563EB),
+                                                unfocusedBorderColor = Color(0xFF4B5563),
+                                                unfocusedLabelColor = Color(0xFF9CA3AF),
+                                                focusedTextColor = Color.White,
+                                                unfocusedTextColor = Color.White,
+                                                cursorColor = Color(0xFF2563EB)
+                                        ),
+                                shape = RoundedCornerShape(12.dp)
+                        )
+                        OutlinedTextField(
+                                value = goal,
+                                onValueChange = { goal = it },
+                                label = { Text("Step success check (optional)") },
+                                placeholder = { Text("Is step ke complete hone ka clear condition likho") },
+                                minLines = 2,
+                                maxLines = 5,
                                 modifier = Modifier.fillMaxWidth(),
                                 colors =
                                         OutlinedTextFieldDefaults.colors(

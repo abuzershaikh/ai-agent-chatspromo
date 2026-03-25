@@ -17,6 +17,10 @@ import com.message.bulksend.reminders.ReminderScheduleGuard
 import com.message.bulksend.autorespond.ai.intent.IntentDetector
 import com.message.bulksend.autorespond.ai.profile.SmartProfileExtractor
 import com.message.bulksend.autorespond.aireply.handlers.MessageHandler
+import com.message.bulksend.autorespond.ai.autonomous.AutonomousGoalRuntime
+import com.message.bulksend.autorespond.ai.autonomous.PaymentStatusEventWatcher
+import com.message.bulksend.autorespond.ai.needdiscovery.NeedDiscoveryManager
+import com.message.bulksend.autorespond.aireply.tooling.NativeToolSkillRegistry
 
 class AIService(private val context: Context) {
     private val configManager = AIConfigManager(context)
@@ -53,6 +57,10 @@ class AIService(private val context: Context) {
     private val processorRegistry = com.message.bulksend.autorespond.aireply.processors.ProcessorRegistry(context)
     private val agentFormIntegration = com.message.bulksend.aiagent.tools.agentform.AgentFormAIIntegration(context)
     private val reminderScheduleGuard = ReminderScheduleGuard(context)
+    private val autonomousGoalRuntime = AutonomousGoalRuntime(context)
+    private val needDiscoveryManager = NeedDiscoveryManager(context)
+    private val nativeToolRegistry = NativeToolSkillRegistry(aiAgentSettings)
+    private val paymentStatusWatcher = PaymentStatusEventWatcher.getInstance(context)
     
     // NEW: Message Handlers for cross-cutting concerns
     private val allMessageHandlers = listOf(
@@ -81,6 +89,10 @@ class AIService(private val context: Context) {
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             gmailTrackingTableSheetManager.initializeSheetSystem()
             gmailTrackingTableSheetManager.startRealtimeSync()
+            if (aiAgentSettings.customTemplateContinuousAutonomousEnabled) {
+                autonomousGoalRuntime.scheduleHeartbeat()
+            }
+            paymentStatusWatcher.startIfEligible()
         }
     }
     
@@ -298,6 +310,28 @@ class AIService(private val context: Context) {
         }
     }
 
+    private fun summarizeInternalAction(action: String): String {
+        val trimmed = action.trim()
+        if (trimmed.isBlank()) return trimmed
+
+        val stepCompletionMatch =
+            Regex(
+                "TASK_STEP_COMPLETE:(\\d+):(WORKFLOW_COMPLETED|NEXT_.+)",
+                RegexOption.IGNORE_CASE
+            ).find(trimmed)
+        if (stepCompletionMatch != null) {
+            val step = stepCompletionMatch.groupValues.getOrNull(1).orEmpty()
+            val state = stepCompletionMatch.groupValues.getOrNull(2).orEmpty()
+            return if (state.equals("WORKFLOW_COMPLETED", ignoreCase = true)) {
+                "Internal update: step $step complete and flow reached final goal check."
+            } else {
+                "Internal update: step $step complete and flow advanced."
+            }
+        }
+
+        return trimmed
+    }
+
     private fun buildToolFollowUpPrompt(
         basePrompt: String,
         userMessage: String,
@@ -311,38 +345,413 @@ class AIService(private val context: Context) {
                 "(\\bstep\\b|\\d+\\.|\\bthen\\b|\\bnext\\b|\\bfirst\\b|\\bafter that\\b|\\bphir\\b|\\buske baad\\b)",
                 RegexOption.IGNORE_CASE
             ).containsMatchIn(userMessage)
+        val primaryGoal = aiAgentSettings.customTemplateGoal.trim()
 
         return buildString {
             append(basePrompt)
             append("\n\n[AUTONOMOUS EXECUTION LOOP]\n")
             append("Round: $round\n")
             append("User Goal: $userMessage\n")
+            if (primaryGoal.isNotBlank()) {
+                append("Template Primary Goal: $primaryGoal\n")
+            }
             if (userHasStepOrder) {
                 append("User ne step order diya hai. Steps ko same order me follow karo.\n")
             }
-            append("Latest executed actions:\n")
-            latestActions.forEach { append("- $it\n") }
+            append("Latest internal actions:\n")
+            latestActions.forEach { append("- ${summarizeInternalAction(it)}\n") }
             if (allActions.isNotEmpty()) {
-                append("All completed actions so far (repeat mat karo unless user explicitly asks):\n")
-                allActions.forEach { append("- $it\n") }
+                append("All internal actions so far (repeat mat karo unless user explicitly asks):\n")
+                allActions.forEach { append("- ${summarizeInternalAction(it)}\n") }
             }
             append("Current drafted reply after execution:\n")
             append(currentResponse)
-            append("\n\nNow continue task completion.\n")
+            append("\n\nContinue the conversation naturally.\n")
             append("Rules:\n")
-            append("1. Agar next tool action chahiye, proper tool command output karo.\n")
-            append("2. Agar task complete ho gaya hai, final user-facing reply do (no extra analysis).\n")
-            append("3. Already completed action ko bina reason repeat mat karo.\n")
+            append("1. Internal step/tool state user ko mat dikhao (no 'step complete', no workflow labels, no raw tags).\n")
+            append("2. Agar next tool action chahiye, proper tool command output karo.\n")
+            append("3. Agar goal abhi complete nahi hua, ek focused natural follow-up question ya next action do.\n")
+            append("4. Goal complete ho to concise, human-like closing reply do.\n")
+            append("5. Already completed action ko bina reason repeat mat karo.\n")
         }
     }
-    
+
+    private fun shouldUseNativeToolCalling(
+        provider: AIProvider,
+        senderPhone: String
+    ): Boolean {
+        if (!aiAgentSettings.isAgentEnabled) return false
+        if (!aiAgentSettings.activeTemplate.equals("CUSTOM", ignoreCase = true)) return false
+        if (!aiAgentSettings.customTemplateNativeToolCallingEnabled) return false
+        if (senderPhone.isBlank()) return false
+        return provider == AIProvider.CHATGPT || provider == AIProvider.GEMINI
+    }
+
+    private suspend fun callProviderWithNativeTools(
+        provider: AIProvider,
+        config: AIConfig,
+        prompt: String,
+        senderPhone: String,
+        senderName: String,
+        userMessage: String
+    ): String? {
+        if (!shouldUseNativeToolCalling(provider, senderPhone)) return null
+
+        val stepAllowlist = resolveStepToolAllowlist(senderPhone, senderName)
+        return runCatching {
+            when (provider) {
+                AIProvider.CHATGPT ->
+                    callChatGPTWithNativeTools(
+                        config = config,
+                        prompt = prompt,
+                        senderPhone = senderPhone,
+                        senderName = senderName,
+                        userMessage = userMessage,
+                        stepAllowlist = stepAllowlist
+                    )
+
+                AIProvider.GEMINI ->
+                    callGeminiWithNativeTools(
+                        config = config,
+                        prompt = prompt,
+                        senderPhone = senderPhone,
+                        senderName = senderName,
+                        userMessage = userMessage,
+                        stepAllowlist = stepAllowlist
+                    )
+
+                AIProvider.CHATSPROMO -> null
+            }
+        }.getOrElse {
+            android.util.Log.e("AIService", "Native tool-call failed, falling back: ${it.message}")
+            null
+        }
+    }
+
+    private suspend fun callChatGPTWithNativeTools(
+        config: AIConfig,
+        prompt: String,
+        senderPhone: String,
+        senderName: String,
+        userMessage: String,
+        stepAllowlist: Set<String>?
+    ): String? {
+        val messages = JSONArray().apply {
+            put(
+                JSONObject()
+                    .put("role", "system")
+                    .put("content", "You are a helpful assistant that uses tools when needed.")
+            )
+            put(
+                JSONObject()
+                    .put("role", "user")
+                    .put("content", prompt)
+            )
+        }
+
+        val tools = nativeToolRegistry.buildOpenAITools(stepAllowlist)
+        if (tools.length() == 0) return null
+
+        val maxTurns = aiAgentSettings.customTemplateAutonomousMaxRounds.coerceAtLeast(1)
+        var lastText = ""
+
+        repeat(maxTurns) { turn ->
+            val requestBody = JSONObject().apply {
+                put("model", config.model)
+                put("messages", messages)
+                put("tools", tools)
+                put("tool_choice", "auto")
+                put("max_tokens", if (config.maxTokens < 500) 1000 else config.maxTokens)
+                put("temperature", config.temperature)
+            }
+
+            val response =
+                postJson(
+                    url = "https://api.openai.com/v1/chat/completions",
+                    headers = mapOf(
+                        "Content-Type" to "application/json",
+                        "Authorization" to "Bearer ${config.apiKey}"
+                    ),
+                    requestBody = requestBody
+                )
+            if (response.code != 200) {
+                android.util.Log.e("AIService", "Native ChatGPT error ${response.code}: ${response.body}")
+                return null
+            }
+
+            val json = JSONObject(response.body)
+            val messageObj =
+                json.optJSONArray("choices")
+                    ?.optJSONObject(0)
+                    ?.optJSONObject("message")
+                    ?: return null
+
+            val rawContent = messageObj.optString("content")
+
+            val content = if (rawContent.equals("null", ignoreCase = true)) "" else rawContent.trim()
+            if (content.isNotBlank()) lastText = content
+
+            val toolCalls = messageObj.optJSONArray("tool_calls")
+            val assistantMessage = JSONObject().put("role", "assistant")
+            assistantMessage.put("content", if (content.isNotBlank()) content else JSONObject.NULL)
+            if (toolCalls != null && toolCalls.length() > 0) {
+                assistantMessage.put("tool_calls", toolCalls)
+            }
+            messages.put(assistantMessage)
+
+            if (toolCalls == null || toolCalls.length() == 0) {
+                return lastText.ifBlank { content }
+            }
+
+            for (index in 0 until toolCalls.length()) {
+                val call = toolCalls.optJSONObject(index) ?: continue
+                val callId = call.optString("id").ifBlank { "call_${turn}_$index" }
+                val fn = call.optJSONObject("function") ?: continue
+                val fnName = fn.optString("name").trim()
+                if (fnName.isBlank()) continue
+                val args = parseToolArguments(fn.optString("arguments", "{}"))
+                val resultContent =
+                    executeNativeToolCall(
+                        functionName = fnName,
+                        args = args,
+                        senderPhone = senderPhone,
+                        senderName = senderName,
+                        userMessage = userMessage,
+                        stepAllowlist = stepAllowlist
+                    )
+
+                messages.put(
+                    JSONObject()
+                        .put("role", "tool")
+                        .put("tool_call_id", callId)
+                        .put("content", resultContent)
+                )
+            }
+        }
+
+        return lastText.takeIf { it.isNotBlank() }
+    }
+
+    private suspend fun callGeminiWithNativeTools(
+        config: AIConfig,
+        prompt: String,
+        senderPhone: String,
+        senderName: String,
+        userMessage: String,
+        stepAllowlist: Set<String>?
+    ): String? {
+        val declarations = nativeToolRegistry.buildGeminiFunctionDeclarations(stepAllowlist)
+        if (declarations.length() == 0) return null
+
+        val contents = JSONArray().apply {
+            put(
+                JSONObject()
+                    .put("role", "user")
+                    .put(
+                        "parts",
+                        JSONArray().put(JSONObject().put("text", prompt))
+                    )
+            )
+        }
+
+        val tools = JSONArray().put(JSONObject().put("functionDeclarations", declarations))
+        val maxTurns = aiAgentSettings.customTemplateAutonomousMaxRounds.coerceAtLeast(1)
+        var lastText = ""
+
+        repeat(maxTurns) {
+            val requestBody = JSONObject().apply {
+                put("contents", contents)
+                put("tools", tools)
+                put(
+                    "generationConfig",
+                    JSONObject()
+                        .put("temperature", config.temperature)
+                        .put("maxOutputTokens", if (config.maxTokens < 1000) 1000 else config.maxTokens)
+                )
+            }
+
+            val response =
+                postJson(
+                    url = "https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}",
+                    headers = mapOf("Content-Type" to "application/json"),
+                    requestBody = requestBody
+                )
+            if (response.code != 200) {
+                android.util.Log.e("AIService", "Native Gemini error ${response.code}: ${response.body}")
+                return null
+            }
+
+            val json = JSONObject(response.body)
+            val candidateContent =
+                json.optJSONArray("candidates")
+                    ?.optJSONObject(0)
+                    ?.optJSONObject("content")
+                    ?: return null
+
+            val parts = candidateContent.optJSONArray("parts") ?: JSONArray()
+            contents.put(
+                JSONObject()
+                    .put("role", "model")
+                    .put("parts", parts)
+            )
+
+            val functionCalls = mutableListOf<JSONObject>()
+            val textChunks = mutableListOf<String>()
+            for (i in 0 until parts.length()) {
+                val part = parts.optJSONObject(i) ?: continue
+                val text = part.optString("text").trim()
+                if (text.isNotBlank()) textChunks += text
+                part.optJSONObject("functionCall")?.let { functionCalls += it }
+            }
+            if (textChunks.isNotEmpty()) {
+                lastText = textChunks.joinToString("\n").trim()
+            }
+
+            if (functionCalls.isEmpty()) {
+                return lastText.takeIf { it.isNotBlank() }
+            }
+
+            val responseParts = JSONArray()
+            functionCalls.forEach { fnCall ->
+                val fnName = fnCall.optString("name").trim()
+                if (fnName.isBlank()) return@forEach
+                val args = fnCall.optJSONObject("args") ?: JSONObject()
+                val resultText =
+                    executeNativeToolCall(
+                        functionName = fnName,
+                        args = args,
+                        senderPhone = senderPhone,
+                        senderName = senderName,
+                        userMessage = userMessage,
+                        stepAllowlist = stepAllowlist
+                    )
+
+                val resultObj =
+                    runCatching { JSONObject(resultText) }
+                        .getOrElse { JSONObject().put("result", resultText) }
+
+                responseParts.put(
+                    JSONObject().put(
+                        "functionResponse",
+                        JSONObject()
+                            .put("name", fnName)
+                            .put("response", resultObj)
+                    )
+                )
+            }
+
+            contents.put(
+                JSONObject()
+                    .put("role", "user")
+                    .put("parts", responseParts)
+            )
+        }
+
+        return lastText.takeIf { it.isNotBlank() }
+    }
+
+    private suspend fun executeNativeToolCall(
+        functionName: String,
+        args: JSONObject,
+        senderPhone: String,
+        senderName: String,
+        userMessage: String,
+        stepAllowlist: Set<String>?
+    ): String {
+        return try {
+            if (functionName.equals("customer_need_probe", ignoreCase = true)) {
+                val latestMessage = args.optString("latest_message").ifBlank { userMessage }
+                val probe = needDiscoveryManager.probe(senderPhone, latestMessage)
+                return JSONObject()
+                    .put("status", "success")
+                    .put("closureReady", probe.closureReady)
+                    .put("knownValues", JSONObject(probe.knownValues))
+                    .put("missingRequiredFieldIds", JSONArray(probe.missingRequiredFieldIds))
+                    .put("suggestedQuestion", probe.suggestedQuestion)
+                    .toString()
+            }
+
+            val command = nativeToolRegistry.buildCommandForCall(functionName, args, stepAllowlist)
+            if (command.isNullOrBlank()) {
+                return JSONObject()
+                    .put("status", "ignored")
+                    .put("message", "Skill disabled or invalid arguments")
+                    .toString()
+            }
+
+            val handlers = getFollowUpHandlersForTemplate(senderPhone, senderName)
+            val execution =
+                executeProcessorAndHandlers(
+                    message = userMessage,
+                    response = command,
+                    senderPhone = senderPhone,
+                    senderName = senderName,
+                    handlers = handlers
+                )
+
+            JSONObject()
+                .put("status", "success")
+                .put("command", command)
+                .put("tool_actions", JSONArray(execution.toolActions))
+                .put("response", execution.response)
+                .put("should_stop_chain", execution.shouldStopChain)
+                .toString()
+        } catch (e: Exception) {
+            JSONObject()
+                .put("status", "error")
+                .put("message", e.message ?: "tool execution failed")
+                .toString()
+        }
+    }
+
+    private fun parseToolArguments(raw: String): JSONObject {
+        return runCatching {
+            val normalized = raw.trim().ifBlank { "{}" }
+            JSONObject(normalized)
+        }.getOrElse {
+            JSONObject()
+        }
+    }
+
+    private data class JsonHttpResponse(val code: Int, val body: String)
+
+    private fun postJson(
+        url: String,
+        headers: Map<String, String>,
+        requestBody: JSONObject
+    ): JsonHttpResponse {
+        val connection = URL(url).openConnection() as HttpURLConnection
+        return try {
+            connection.requestMethod = "POST"
+            headers.forEach { (key, value) -> connection.setRequestProperty(key, value) }
+            connection.doOutput = true
+            connection.connectTimeout = 60000
+            connection.readTimeout = 90000
+            connection.outputStream.use { stream ->
+                stream.write(requestBody.toString().toByteArray())
+            }
+
+            val code = connection.responseCode
+            val body =
+                if (code in 200..299) {
+                    connection.inputStream.bufferedReader().readText()
+                } else {
+                    connection.errorStream?.bufferedReader()?.readText().orEmpty()
+                }
+            JsonHttpResponse(code = code, body = body)
+        } finally {
+            connection.disconnect()
+        }
+    }
+
     suspend fun generateReply(
         provider: AIProvider,
         message: String,
         senderName: String = "User",
-        senderPhone: String = "" // Added phone number parameter
+        senderPhone: String = "",
+        fromAutonomousRuntime: Boolean = false
     ): String = withContext(Dispatchers.IO) {
-        android.util.Log.d("AIService", "🚀 generateReply STARTED")
+        android.util.Log.d("AIService", "ðŸš€ generateReply STARTED")
         android.util.Log.d("AIService", "Provider: ${provider.displayName}, Sender: $senderName, Phone: $senderPhone")
         android.util.Log.d("AIService", "Message: $message")
         
@@ -350,14 +759,30 @@ class AIService(private val context: Context) {
         android.util.Log.d("AIService", "Config loaded, API Key present: ${config.apiKey.isNotEmpty()}")
         
         if (config.apiKey.isEmpty()) {
-            android.util.Log.e("AIService", "❌ API Key is empty!")
+            android.util.Log.e("AIService", "âŒ API Key is empty!")
             return@withContext "AI not configured. Please add API key."
         }
         
         // Variable to store detected intent (accessible throughout function)
         var detectedIntent = "UNKNOWN"
+
+
+
+        if (aiAgentSettings.isAgentEnabled && senderPhone.isNotBlank() && !fromAutonomousRuntime) {
+
+            runCatching {
+
+                needDiscoveryManager.updateFromIncomingMessage(senderPhone, message)
+
+            }.onFailure {
+
+                android.util.Log.e("AIService", "Need-discovery update failed: ${it.message}")
+
+            }
+
+        }
         
-        android.util.Log.d("AIService", "🔍 Starting profile enrichment and intent detection...")
+        android.util.Log.d("AIService", "ðŸ” Starting profile enrichment and intent detection...")
         
         // Auto-enrich profile from sheet if first contact
         if (aiAgentSettings.isAgentEnabled && senderPhone.isNotBlank()) {
@@ -445,7 +870,7 @@ class AIService(private val context: Context) {
                     baseContext
                 }
             } catch (e: Exception) {
-                android.util.Log.e("AIService", "❌ AI Agent context building failed: ${e.message}", e)
+                android.util.Log.e("AIService", "âŒ AI Agent context building failed: ${e.message}", e)
                 // Fallback to legacy prompt
                 val base = businessDataManager.buildAIPrompt(provider, message, senderName)
                 "$base\n\n${config.responseLength.instruction}"
@@ -473,8 +898,24 @@ class AIService(private val context: Context) {
                 val chatsPromoService = ChatsPromoAIService(context)
                 chatsPromoService.generateReply(message, senderName)
             }
-            AIProvider.CHATGPT -> callChatGPT(config, prompt)
-            AIProvider.GEMINI -> callGemini(config, prompt)
+            AIProvider.CHATGPT ->
+                callProviderWithNativeTools(
+                    provider = provider,
+                    config = config,
+                    prompt = prompt,
+                    senderPhone = senderPhone,
+                    senderName = senderName,
+                    userMessage = message
+                ) ?: callChatGPT(config, prompt)
+            AIProvider.GEMINI ->
+                callProviderWithNativeTools(
+                    provider = provider,
+                    config = config,
+                    prompt = prompt,
+                    senderPhone = senderPhone,
+                    senderName = senderName,
+                    userMessage = message
+                ) ?: callGemini(config, prompt)
         }
         
         var cleanedResponse = cleanMarkdownFormatting(rawResponse)
@@ -525,8 +966,24 @@ class AIService(private val context: Context) {
 
                 val followUpRawResponse =
                     when (provider) {
-                        AIProvider.CHATGPT -> callChatGPT(config, followUpPrompt)
-                        AIProvider.GEMINI -> callGemini(config, followUpPrompt)
+                        AIProvider.CHATGPT ->
+                            callProviderWithNativeTools(
+                                provider = provider,
+                                config = config,
+                                prompt = followUpPrompt,
+                                senderPhone = senderPhone,
+                                senderName = senderName,
+                                userMessage = message
+                            ) ?: callChatGPT(config, followUpPrompt)
+                        AIProvider.GEMINI ->
+                            callProviderWithNativeTools(
+                                provider = provider,
+                                config = config,
+                                prompt = followUpPrompt,
+                                senderPhone = senderPhone,
+                                senderName = senderName,
+                                userMessage = message
+                            ) ?: callGemini(config, followUpPrompt)
                         AIProvider.CHATSPROMO -> cleanedResponse
                     }
                 nextRoundResponse = cleanMarkdownFormatting(followUpRawResponse)
@@ -651,6 +1108,25 @@ class AIService(private val context: Context) {
             }
         }
         
+        if (
+            !fromAutonomousRuntime &&
+                aiAgentSettings.isAgentEnabled &&
+                senderPhone.isNotBlank() &&
+                aiAgentSettings.activeTemplate.equals("CUSTOM", ignoreCase = true) &&
+                aiAgentSettings.customTemplateContinuousAutonomousEnabled
+        ) {
+            runCatching {
+                autonomousGoalRuntime.enqueueFromIncomingMessage(
+                    senderPhone = senderPhone,
+                    senderName = senderName,
+                    lastUserMessage = message
+                )
+                paymentStatusWatcher.startIfEligible()
+            }.onFailure {
+                android.util.Log.e("AIService", "Autonomous enqueue failed: ${it.message}")
+            }
+        }
+
         return@withContext cleanedResponse
     }
     
@@ -676,7 +1152,7 @@ class AIService(private val context: Context) {
             // Log score improvement
             val improvement = leadScorer.calculateScoreImprovement(oldScore, newScore)
             if (improvement != 0) {
-                android.util.Log.d("AIService", "Lead score updated: $oldScore → $newScore (${if (improvement > 0) "+" else ""}$improvement)")
+                android.util.Log.d("AIService", "Lead score updated: $oldScore â†’ $newScore (${if (improvement > 0) "+" else ""}$improvement)")
             }
         } catch (e: Exception) {
             android.util.Log.e("AIService", "Lead score update failed: ${e.message}")
@@ -749,7 +1225,7 @@ class AIService(private val context: Context) {
     private fun cleanMarkdownFormatting(text: String): String {
         var cleaned = text
 
-        val toolCommandPattern = Regex("\\[(SEND_PAYMENT|SEND_DOCUMENT|GENERATE-PAYMENT-LINK)\\s*:", RegexOption.IGNORE_CASE)
+        val toolCommandPattern = Regex("\\[(SEND_PAYMENT|SEND_DOCUMENT|SEND_DOCUMENT_BY_TAG|GENERATE-PAYMENT-LINK|WRITE_SHEET|TASK_STEP_COMPLETE|SEND_AGENT_FORM|CHECK_AGENT_FORM_RESPONSE|CALENDAR_[A-Z_]+|GMAIL_[A-Z_]+)\\b", RegexOption.IGNORE_CASE)
         val firstLine = cleaned.lineSequence().firstOrNull()?.trim().orEmpty()
         val firstLineHasToolCommand = toolCommandPattern.containsMatchIn(firstLine)
         
@@ -801,7 +1277,7 @@ class AIService(private val context: Context) {
         cleaned = cleaned.replace(Regex("`(.+?)`"), "$1")
         
         // Remove bullet points but keep the text
-        cleaned = cleaned.replace(Regex("^[•·∙◦▪▫]\\s*", RegexOption.MULTILINE), "")
+        cleaned = cleaned.replace(Regex("^[â€¢Â·âˆ™â—¦â–ªâ–«]\\s*", RegexOption.MULTILINE), "")
         
         // Clean up extra whitespace
         cleaned = cleaned.replace(Regex("\\n{3,}"), "\n\n")
@@ -866,13 +1342,13 @@ class AIService(private val context: Context) {
         val apiKey = config.apiKey
         val model = config.model
         return try {
-            android.util.Log.d("AIService", "🚀 Calling Gemini API with model: $model")
-            android.util.Log.d("AIService", "📝 Prompt length: ${prompt.length} chars")
+            android.util.Log.d("AIService", "ðŸš€ Calling Gemini API with model: $model")
+            android.util.Log.d("AIService", "ðŸ“ Prompt length: ${prompt.length} chars")
             
             val url = URL("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey")
             val connection = url.openConnection() as HttpURLConnection
             
-            android.util.Log.d("AIService", "🔗 Connection created, setting properties...")
+            android.util.Log.d("AIService", "ðŸ”— Connection created, setting properties...")
             
             connection.requestMethod = "POST"
             connection.setRequestProperty("Content-Type", "application/json")
@@ -923,16 +1399,16 @@ class AIService(private val context: Context) {
                 })
             }
             
-            android.util.Log.d("AIService", "📤 Sending request to Gemini...")
+            android.util.Log.d("AIService", "ðŸ“¤ Sending request to Gemini...")
             android.util.Log.d("AIService", "Request body: ${requestBody.toString()}")
             connection.outputStream.use { it.write(requestBody.toString().toByteArray()) }
             
-            android.util.Log.d("AIService", "⏳ Waiting for response...")
+            android.util.Log.d("AIService", "â³ Waiting for response...")
             android.util.Log.d("AIService", "Response code: ${connection.responseCode}")
             
             if (connection.responseCode != 200) {
                 val errorStream = connection.errorStream?.bufferedReader()?.readText() ?: "Unknown error"
-                android.util.Log.e("AIService", "❌ Gemini API Error ${connection.responseCode}: $errorStream")
+                android.util.Log.e("AIService", "âŒ Gemini API Error ${connection.responseCode}: $errorStream")
                 android.util.Log.e("AIService", "Gemini API Error: $errorStream")
                 return "Error ${connection.responseCode}: $errorStream"
             }
@@ -1076,12 +1552,12 @@ class AIService(private val context: Context) {
             val replyManager = AIReplyManager(context)
             val provider = replyManager.getSelectedProvider()
             val config = configManager.getConfig(provider)
-            
+
             if (config.apiKey.isEmpty()) return null
-    
+
             val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
             val currentDateTime = dateFormat.format(Date())
-    
+
             val prompt = """
                 Task: Extract reminder details from message.
                 Message: "$message"
@@ -1093,21 +1569,21 @@ class AIService(private val context: Context) {
                 - If specific time not mentioned, return null for time key.
                 - Output STRICT JSON. No markdown.
             """.trimIndent()
-    
+
             val rawResponse = when (provider) {
                 AIProvider.GEMINI -> callGemini(config, prompt)
                 AIProvider.CHATGPT -> callChatGPT(config, prompt)
                 else -> return null
             }
-            
+
             val jsonStr = rawResponse.replace("```json", "").replace("```", "").trim()
             val json = JSONObject(jsonStr)
-            
+
             if (json.has("date") && json.has("time")) {
                 val date = json.getString("date")
                 val time = json.getString("time")
                 val contextText = json.optString("context", "Reminder")
-                
+
                 GlobalReminderManager(context).addReminder(
                     phone = senderPhone,
                     name = senderName,
@@ -1116,7 +1592,7 @@ class AIService(private val context: Context) {
                     prompt = contextText,
                     templateType = "GENERAL"
                 )
-                
+
                 return "✅ Reminder set for $date at $time:\n\"$contextText\""
             }
         } catch (e: Exception) {
@@ -1135,33 +1611,29 @@ class AIService(private val context: Context) {
         val replyManager = AIReplyManager(context)
         val provider = replyManager.getSelectedProvider()
         val config = configManager.getConfig(provider)
-        
+
         if (config.apiKey.isEmpty()) return@withContext "Reminder: $reminderContext at $dateTime (AI not configured)"
-        
-        // 1. Build Context
-        // We temporarily override the prompt generation to focus on "Drafting a message"
+
         val stringBuilder = StringBuilder()
         stringBuilder.append("System: You are an AI assistant for ${aiAgentSettings.agentName}.\n")
-        
-        // Add Clinic context if template match
+
         if (template.equals("CLINIC", ignoreCase = true) || aiAgentSettings.activeTemplate == "CLINIC") {
             val clinicGenerator = com.message.bulksend.autorespond.ai.core.ClinicContextGenerator(context)
             stringBuilder.append(clinicGenerator.generatePrompt(phone))
         }
-        
+
         stringBuilder.append("\n\n")
         stringBuilder.append("🔴 URGENT TASK: Generate a reminder message to send to a customer.\n")
         stringBuilder.append("Customer Name: $name\n")
         stringBuilder.append("Customer Phone: $phone\n")
         stringBuilder.append("Event Date/Time: $dateTime\n")
         stringBuilder.append("Reminder Details: $reminderContext\n\n")
-        stringBuilder.append("INSTRUCTION: Write a professional, friendly, and short reminder message. \n")
+        stringBuilder.append("INSTRUCTION: Write a professional, friendly, and short reminder message.\n")
         stringBuilder.append("Do NOT include 'Here is the message' or quotes. Just the message body.\n")
         stringBuilder.append("Use emojis if appropriate.\n")
-        
+
         val prompt = stringBuilder.toString()
-        
-        // 2. Call AI Provider
+
         try {
             when (provider) {
                 AIProvider.GEMINI -> callGemini(config, prompt)
@@ -1174,4 +1646,7 @@ class AIService(private val context: Context) {
         }
     }
 }
+
+
+
 

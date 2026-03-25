@@ -110,3 +110,4 @@ interface CellDao {
     @Query("SELECT * FROM cells WHERE rowId = :rowId AND columnId = :columnId LIMIT 1")
     fun getCellSync(rowId: Long, columnId: Long): CellModel?
 }
+ 

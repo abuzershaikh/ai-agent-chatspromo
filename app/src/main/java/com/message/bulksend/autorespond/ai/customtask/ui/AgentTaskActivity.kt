@@ -87,6 +87,7 @@ private fun AgentTaskScreen(onBack: () -> Unit) {
     val taskManager = remember { AgentTaskManager(context) }
 
     var taskModeEnabled by rememberSaveable { mutableStateOf(settings.customTemplateTaskModeEnabled) }
+    var flowGoal by rememberSaveable { mutableStateOf(settings.customTemplateGoal) }
     var tasks by remember { mutableStateOf(taskManager.getTasks()) }
     var showDeleteFlowDialog by remember { mutableStateOf(false) }
     var businessKnowledge by remember {
@@ -219,6 +220,35 @@ private fun AgentTaskScreen(onBack: () -> Unit) {
                             }
 
                             HorizontalDivider(color = BORDER_COL, thickness = 0.5.dp)
+
+                            OutlinedTextField(
+                                value = flowGoal,
+                                onValueChange = {
+                                    flowGoal = it
+                                    settings.customTemplateGoal = it.trim()
+                                },
+                                label = { Text("Primary Goal (final success check)") },
+                                placeholder = { Text("Eg: user se final booking ya payment confirmation lena") },
+                                minLines = 2,
+                                maxLines = 4,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = BLUE,
+                                    focusedLabelColor = BLUE,
+                                    unfocusedBorderColor = Color(0xFF4B5563),
+                                    unfocusedLabelColor = Color(0xFF9CA3AF),
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    cursorColor = BLUE
+                                ),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            Text(
+                                "Flow ke last step par agent isi goal ko verify karega aur tabhi natural close karega.",
+                                color = TEXT_MUT,
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp
+                            )
 
                             // Business knowledge status
                             Row(

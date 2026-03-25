@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
     <!-- Permissions -->
@@ -134,6 +134,14 @@
             android:name=".autorespond.ai.ui.customai.CustomBusinessDetailsActivity"
             android:exported="false"
             android:label="Business Knowledge" />
+
+        <activity
+
+            android:name=".autorespond.ai.needdiscovery.ui.NeedDiscoveryActivity"
+
+            android:exported="false"
+
+            android:label="Need Discovery" />
         <activity
             android:name=".anylatic.ReportlistActivity"
             android:exported="false" />
@@ -984,3 +992,6 @@
     </application>
 
 </manifest>
+
+
+
