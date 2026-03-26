@@ -281,15 +281,15 @@ object VoiceTranscriptionService {
             
             Log.d(TAG, "✓ Found waiting message ID: ${waitingMessage.id}")
 
-            // NEW: Check for Reverse AI Interception
-            val reverseAIManager = com.message.bulksend.aiagent.tools.reverseai.ReverseAIManager(context)
-            if (reverseAIManager.isMessageFromOwner(phoneNumber)) {
-                Log.d(TAG, "🔄 Message is from Owner! Diverting to Reverse AI.")
-                val responseMsg = reverseAIManager.processOwnerInstruction(transcribedText)
-                
+            // NEW: Check for Owner Assist interception (strict owner-number only)
+            val ownerAssistManager = com.message.bulksend.aiagent.tools.ownerassist.OwnerAssistManager(context)
+            if (ownerAssistManager.isAuthorizedOwner(phoneNumber)) {
+                Log.d(TAG, "🔄 Message is from Owner! Diverting to Owner Assist.")
+                val responseMsg = ownerAssistManager.processOwnerInstruction(transcribedText)
+
                 // Keep the WAITING_TRANSCRIPTION message logged but marked handled
                 messageRepository.updateMessageWithReply(waitingMessage.id, responseMsg, "SENT")
-                
+
                 // Reply to the owner
                 val intent = android.content.Intent("com.message.bulksend.SEND_VOICE_NOTE_REPLY").apply {
                     putExtra("phoneNumber", phoneNumber)
@@ -300,8 +300,8 @@ object VoiceTranscriptionService {
                 context.sendBroadcast(intent)
                 return@withContext
             }
-            // END Reverse AI Interception
-            
+            // END Owner Assist interception
+
             // Check if AI Agent is enabled
             val aiAgentSettings = com.message.bulksend.autorespond.ai.settings.AIAgentSettingsManager(context)
             if (!aiAgentSettings.isAgentEnabled) {

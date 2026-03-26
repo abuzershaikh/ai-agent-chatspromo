@@ -49,13 +49,16 @@ class ReverseAIManager(private val context: Context) {
         if (!isReverseAIEnabled) return false
         val ownerPhone = ownerPhoneNumber
         if (ownerPhone.isEmpty()) return false
-        
-        // Match numbers, ignoring non-digits
+
+        // Strict number match, ignoring non-digits.
+        // Empty sender must never pass authorization.
         val cleanOwner = ownerPhone.replace(Regex("[^0-9]"), "")
         val cleanSender = senderPhone.replace(Regex("[^0-9]"), "")
-        
-        // Exact match or partial match (without country code)
-        return cleanSender == cleanOwner || cleanSender.endsWith(cleanOwner) || cleanOwner.endsWith(cleanSender)
+        if (cleanOwner.isBlank() || cleanSender.isBlank()) return false
+
+        return cleanSender == cleanOwner ||
+            cleanSender.endsWith(cleanOwner) ||
+            cleanOwner.endsWith(cleanSender)
     }
 
     suspend fun processOwnerInstruction(instruction: String, provider: AIProvider = AIProvider.GEMINI): String = withContext(Dispatchers.IO) {
@@ -1237,4 +1240,3 @@ class ReverseAIManager(private val context: Context) {
         @SerializedName("outgoing_message") val outgoingMessage: String?
     )
 }
-

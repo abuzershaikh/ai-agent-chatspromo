@@ -1,4 +1,4 @@
-﻿package com.message.bulksend.autorespond.aireply
+package com.message.bulksend.autorespond.aireply
 
 import android.content.Context
 import kotlinx.coroutines.CoroutineScope
@@ -1055,9 +1055,11 @@ class AIService(private val context: Context) {
                                 .split(",")
                                 .map { it.trim() }
                                 .filter { it.isNotBlank() }
+                        val linkedFolderName = aiAgentSettings.customTemplateSheetFolderName.trim()
                         val sheetManager = com.message.bulksend.autorespond.ai.customsheet.CustomTemplateSheetManager(context)
                         sheetManager.ensureTemplateSheetSystem(
                             templateName = customTemplateName,
+                            folderNameOverride = linkedFolderName,
                             readSheetNameOverride = aiAgentSettings.customTemplateReadSheetName,
                             writeSheetNameOverride = aiAgentSettings.customTemplateWriteSheetName,
                             salesSheetNameOverride = aiAgentSettings.customTemplateSalesSheetName,
@@ -1071,7 +1073,8 @@ class AIService(private val context: Context) {
                                 userName = senderName,
                                 userMessage = message,
                                 aiReply = cleanedResponse,
-                                intent = detectedIntent
+                                intent = detectedIntent,
+                                folderNameOverride = linkedFolderName
                             )
                         }
 
@@ -1080,7 +1083,8 @@ class AIService(private val context: Context) {
                             phoneNumber = senderPhone,
                             userName = senderName,
                             userMessage = message,
-                            intent = detectedIntent
+                            intent = detectedIntent,
+                            folderNameOverride = linkedFolderName
                         )
                     } catch (e: Exception) {
                         android.util.Log.e("AIService", "Custom sheet logging failed: ${e.message}")
@@ -1277,7 +1281,7 @@ class AIService(private val context: Context) {
     private fun cleanMarkdownFormatting(text: String): String {
         var cleaned = text
 
-        val toolCommandPattern = Regex("\\[(SEND_PAYMENT|SEND_DOCUMENT|SEND_DOCUMENT_BY_TAG|GENERATE-PAYMENT-LINK|WRITE_SHEET|TASK_STEP_COMPLETE|SEND_AGENT_FORM|CHECK_AGENT_FORM_RESPONSE|CALENDAR_[A-Z_]+|GMAIL_[A-Z_]+)\\b", RegexOption.IGNORE_CASE)
+        val toolCommandPattern = Regex("\\[(SEND_PAYMENT|SEND_DOCUMENT|SEND_DOCUMENT_BY_TAG|GENERATE-PAYMENT-LINK|WRITE_SHEET|SHEET_(SELECT|AGG|UPSERT|BULK_UPSERT|PIVOT)|TASK_STEP_COMPLETE|SEND_AGENT_FORM|CHECK_AGENT_FORM_RESPONSE|CALENDAR_[A-Z_]+|GMAIL_[A-Z_]+)\\b", RegexOption.IGNORE_CASE)
         val firstLine = cleaned.lineSequence().firstOrNull()?.trim().orEmpty()
         val firstLineHasToolCommand = toolCommandPattern.containsMatchIn(firstLine)
         
@@ -1698,14 +1702,3 @@ class AIService(private val context: Context) {
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-

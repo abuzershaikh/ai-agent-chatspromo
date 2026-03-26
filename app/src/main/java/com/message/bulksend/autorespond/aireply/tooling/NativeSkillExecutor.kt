@@ -30,6 +30,7 @@ class NativeSkillExecutor(
     private val agentFormIntegration = AgentFormAIIntegration(appContext)
     private val productManager = AIAgentProductManager(appContext)
     private val sheetWriteExecutor = NativeSheetWriteExecutor(appContext)
+    private val sheetCommandExecutor = NativeSheetCommandExecutor(appContext)
     private val taskEngine = AgentTaskEngine(AgentTaskManager(appContext))
     private val gmailTrackingSheetManager = GmailTrackingTableSheetManager(appContext)
 
@@ -50,6 +51,11 @@ class NativeSkillExecutor(
             "check_agent_form_response" -> executeCheckAgentFormResponse(senderPhone)
             "send_catalogue" -> executeSendCatalogue(args, senderPhone, senderName)
             "write_sheet" -> sheetWriteExecutor.write(args, senderPhone, senderName, userMessage)
+            "sheet_select" -> executeSheetCommand("SHEET_SELECT", args)
+            "sheet_aggregate" -> executeSheetCommand("SHEET_AGG", args)
+            "sheet_pivot" -> executeSheetCommand("SHEET_PIVOT", args)
+            "sheet_upsert" -> executeSheetCommand("SHEET_UPSERT", args)
+            "sheet_bulk_upsert" -> executeSheetCommand("SHEET_BULK_UPSERT", args)
             "calendar_action" -> executeCalendarAction(args)
             "gmail_action" -> executeGmailAction(args, senderPhone, senderName)
             "task_step_complete" -> executeTaskStepComplete(args, senderPhone, senderName)
@@ -395,6 +401,13 @@ class NativeSkillExecutor(
                 .put("missingRequiredFieldIds", org.json.JSONArray(probe.missingRequiredFieldIds))
                 .put("suggestedQuestion", probe.suggestedQuestion)
         )
+    }
+
+    private suspend fun executeSheetCommand(
+        command: String,
+        args: JSONObject
+    ): SkillExecutionResult {
+        return sheetCommandExecutor.execute(command, args)
     }
 
     private suspend fun executeCalendarAction(args: JSONObject): SkillExecutionResult {
@@ -755,7 +768,4 @@ class NativeSkillExecutor(
         return enriched
     }
 }
-
-
-
 

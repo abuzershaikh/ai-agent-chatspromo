@@ -70,7 +70,8 @@ class CustomSheetWriteHandler(
                                     phoneNumber = senderPhone,
                                     userName = senderName,
                                     fields = parsed,
-                                    sourceMessage = message
+                                    sourceMessage = message,
+                                    folderNameOverride = settings.customTemplateSheetFolderName
                                 )
                         }
                     writeSuccess = writeSuccess || ok

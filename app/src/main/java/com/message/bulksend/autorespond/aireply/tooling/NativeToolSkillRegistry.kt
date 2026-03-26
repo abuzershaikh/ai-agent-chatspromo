@@ -204,6 +204,117 @@ class NativeToolSkillRegistry(
             }
         ),
         SkillDefinition(
+            functionName = "sheet_select",
+            toolId = AgentTaskToolRegistry.WRITE_SHEET,
+            description = "Read rows from local TableSheet using filters/sort/limit.",
+            parameters = JSONObject()
+                .put("type", "object")
+                .put(
+                    "properties",
+                    JSONObject()
+                        .put("table", JSONObject().put("type", "string"))
+                        .put("tableId", JSONObject().put("type", "integer"))
+                        .put("columns", JSONObject().put("type", "array").put("items", JSONObject().put("type", "string")))
+                        .put("where", JSONObject().put("type", "object"))
+                        .put("contains", JSONObject().put("type", "object"))
+                        .put("orderBy", JSONObject().put("type", "string"))
+                        .put("order", JSONObject().put("type", "string"))
+                        .put("limit", JSONObject().put("type", "integer"))
+                ),
+            isEnabled = {
+                it.customTemplateEnableSheetReadTool || it.customTemplateEnableSheetWriteTool
+            },
+            executionPolicy = SkillExecutionPolicy(timeoutMs = 25_000L, maxRetries = 0),
+            commandBuilder = { args -> buildStructuredJsonCommand("SHEET_SELECT", args) }
+        ),
+        SkillDefinition(
+            functionName = "sheet_aggregate",
+            toolId = AgentTaskToolRegistry.WRITE_SHEET,
+            description = "Run aggregate query (COUNT/SUM/AVG/MIN/MAX/COUNTIF) on local TableSheet.",
+            parameters = JSONObject()
+                .put("type", "object")
+                .put(
+                    "properties",
+                    JSONObject()
+                        .put("table", JSONObject().put("type", "string"))
+                        .put("tableId", JSONObject().put("type", "integer"))
+                        .put("operation", JSONObject().put("type", "string"))
+                        .put("agg", JSONObject().put("type", "string"))
+                        .put("column", JSONObject().put("type", "string"))
+                        .put("criteria", JSONObject().put("type", "string"))
+                        .put("where", JSONObject().put("type", "object"))
+                        .put("contains", JSONObject().put("type", "object"))
+                ),
+            isEnabled = {
+                it.customTemplateEnableSheetReadTool || it.customTemplateEnableSheetWriteTool
+            },
+            executionPolicy = SkillExecutionPolicy(timeoutMs = 25_000L, maxRetries = 0),
+            commandBuilder = { args -> buildStructuredJsonCommand("SHEET_AGG", args) }
+        ),
+        SkillDefinition(
+            functionName = "sheet_pivot",
+            toolId = AgentTaskToolRegistry.WRITE_SHEET,
+            description = "Run pivot query on local TableSheet grouped by a column.",
+            parameters = JSONObject()
+                .put("type", "object")
+                .put(
+                    "properties",
+                    JSONObject()
+                        .put("table", JSONObject().put("type", "string"))
+                        .put("tableId", JSONObject().put("type", "integer"))
+                        .put("groupBy", JSONObject().put("type", "string"))
+                        .put("operation", JSONObject().put("type", "string"))
+                        .put("valueColumn", JSONObject().put("type", "string"))
+                        .put("column", JSONObject().put("type", "string"))
+                        .put("where", JSONObject().put("type", "object"))
+                        .put("contains", JSONObject().put("type", "object"))
+                ),
+            isEnabled = {
+                it.customTemplateEnableSheetReadTool || it.customTemplateEnableSheetWriteTool
+            },
+            executionPolicy = SkillExecutionPolicy(timeoutMs = 25_000L, maxRetries = 0),
+            commandBuilder = { args -> buildStructuredJsonCommand("SHEET_PIVOT", args) }
+        ),
+        SkillDefinition(
+            functionName = "sheet_upsert",
+            toolId = AgentTaskToolRegistry.WRITE_SHEET,
+            description = "Upsert one row in local TableSheet using key and values objects.",
+            parameters = JSONObject()
+                .put("type", "object")
+                .put(
+                    "properties",
+                    JSONObject()
+                        .put("table", JSONObject().put("type", "string"))
+                        .put("tableId", JSONObject().put("type", "integer"))
+                        .put("key", JSONObject().put("type", "object"))
+                        .put("values", JSONObject().put("type", "object"))
+                )
+                .put("required", JSONArray().put("key").put("values")),
+            isEnabled = { it.customTemplateEnableSheetWriteTool },
+            executionPolicy = SkillExecutionPolicy(timeoutMs = 30_000L, maxRetries = 0),
+            commandBuilder = { args -> buildStructuredJsonCommand("SHEET_UPSERT", args) }
+        ),
+        SkillDefinition(
+            functionName = "sheet_bulk_upsert",
+            toolId = AgentTaskToolRegistry.WRITE_SHEET,
+            description = "Bulk upsert multiple rows into local TableSheet.",
+            parameters = JSONObject()
+                .put("type", "object")
+                .put(
+                    "properties",
+                    JSONObject()
+                        .put("table", JSONObject().put("type", "string"))
+                        .put("tableId", JSONObject().put("type", "integer"))
+                        .put("rows", JSONObject().put("type", "array").put("items", JSONObject().put("type", "object")))
+                        .put("keyColumns", JSONObject().put("type", "array").put("items", JSONObject().put("type", "string")))
+                        .put("maxRows", JSONObject().put("type", "integer"))
+                )
+                .put("required", JSONArray().put("rows")),
+            isEnabled = { it.customTemplateEnableSheetWriteTool },
+            executionPolicy = SkillExecutionPolicy(timeoutMs = 45_000L, maxRetries = 0),
+            commandBuilder = { args -> buildStructuredJsonCommand("SHEET_BULK_UPSERT", args) }
+        ),
+        SkillDefinition(
             functionName = "calendar_action",
             toolId = AgentTaskToolRegistry.GOOGLE_CALENDAR,
             description = "Execute a Google Calendar action.",
@@ -415,5 +526,11 @@ class NativeToolSkillRegistry(
                 .replace(';', ',')
                 .trim()
         }
+        private fun buildStructuredJsonCommand(command: String, args: JSONObject): String? {
+            if (command.isBlank() || args.length() == 0) return null
+            val payload = runCatching { JSONObject(args.toString()) }.getOrNull() ?: return null
+            return "[$command: $payload]"
+        }
     }
 }
+

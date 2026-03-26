@@ -177,6 +177,15 @@ class AIAgentSettingsManager(context: Context) {
             ?: "Agent Read Sheet"
         set(value) = prefs.edit().putString("custom_template_reference_sheet_name", value).apply()
 
+    var customTemplateSheetMatchFields: String
+        get() = prefs.getString("custom_template_sheet_match_fields", "Phone Number")
+            ?.trim()
+            ?.ifBlank { "Phone Number" }
+            ?: "Phone Number"
+        set(value) = prefs.edit()
+            .putString("custom_template_sheet_match_fields", value.trim())
+            .apply()
+
     var customTemplateWriteSheetColumns: String
         get() = prefs.getString("custom_template_write_sheet_columns", "") ?: ""
         set(value) = prefs.edit().putString("custom_template_write_sheet_columns", value).apply()

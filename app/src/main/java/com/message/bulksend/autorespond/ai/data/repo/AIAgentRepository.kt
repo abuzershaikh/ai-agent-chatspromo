@@ -51,7 +51,8 @@ class AIAgentRepository(
         phoneNumber: String,
         query: String,
         tableNameFilter: String? = null,
-        allowedFolders: List<String> = listOf("AI Agent Data Sheet", PaymentSheetManager.PAYMENT_FOLDER_NAME)
+        allowedFolders: List<String> = listOf("AI Agent Data Sheet", PaymentSheetManager.PAYMENT_FOLDER_NAME),
+        matchFields: List<String> = emptyList()
     ): List<String> {
         val results = mutableListOf<String>()
 
@@ -90,6 +91,28 @@ class AIAgentRepository(
 
             if (allowedTableIds.isEmpty()) return emptyList()
 
+            val normalizedMatchFields =
+                matchFields
+                    .map { normalizeColumnKeyForMatch(it) }
+                    .filter { it.isNotBlank() }
+                    .distinct()
+
+            val queryTokens = buildQueryTokens(query)
+            val matchTokens =
+                buildList {
+                    val sanitizedPhone = sanitizePhone(phoneNumber)
+                    if (sanitizedPhone.isNotBlank()) add(sanitizedPhone)
+
+                    val rawPhone = phoneNumber.trim()
+                    if (rawPhone.isNotBlank()) add(rawPhone)
+
+                    addAll(queryTokens)
+                    addAll(extractEmails(query))
+                }
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() }
+                    .distinct()
+
             val rowIdsToSearch = mutableSetOf<Long>()
 
             val sanitizedPhone = sanitizePhone(phoneNumber)
@@ -103,7 +126,7 @@ class AIAgentRepository(
                 )
             }
 
-            buildQueryTokens(query).forEach { token ->
+            queryTokens.forEach { token ->
                 rowIdsToSearch.addAll(
                     tableSheetRepository.searchRowIdsIndexed(
                         tableIds = allowedTableIds.toList(),
@@ -118,7 +141,7 @@ class AIAgentRepository(
                 if (sanitizedPhone.isNotBlank()) {
                     rowIdsToSearch.addAll(cellDao.findRowIdsByValue(sanitizedPhone))
                 }
-                buildQueryTokens(query).forEach { token ->
+                queryTokens.forEach { token ->
                     rowIdsToSearch.addAll(cellDao.findRowIdsByValue(token))
                 }
             }
@@ -137,20 +160,27 @@ class AIAgentRepository(
                     if (tableId !in allowedTableIds) return@forEach
 
                     val columns = columnDao.getColumnsByTableIdSync(tableId)
-                    val formattedData =
-                        cells.mapNotNull { cell ->
-                            val column = columns.find { it.id == cell.columnId }
-                            if (column != null && cell.value.isNotBlank()) {
-                                "${column.name}=${cell.value}"
-                            } else {
-                                null
-                            }
-                        }.joinToString(", ")
+                    val columnsById = columns.associateBy { it.id }
+                    val valuesByColumnKey = mutableMapOf<String, String>()
+                    val formattedPairs = mutableListOf<String>()
 
-                    if (formattedData.isBlank()) return@forEach
+                    cells.forEach { cell ->
+                        val column = columnsById[cell.columnId] ?: return@forEach
+                        if (cell.value.isBlank()) return@forEach
+
+                        formattedPairs += "${column.name}=${cell.value}"
+                        valuesByColumnKey[normalizeColumnKeyForMatch(column.name)] = cell.value
+                    }
+
+                    if (formattedPairs.isEmpty()) return@forEach
+
+                    if (!rowMatchesMatchFields(valuesByColumnKey, normalizedMatchFields, matchTokens)) {
+                        return@forEach
+                    }
 
                     val tableName = tableNameById[tableId] ?: (tableDao.getTableByIdSync(tableId)?.name ?: "Unknown")
                     val folderName = folderNameByTableId[tableId] ?: "Data"
+                    val formattedData = formattedPairs.joinToString(", ")
                     results.add("[$folderName > $tableName] $formattedData")
                     addedRows.add(rowId)
                 } catch (e: Exception) {
@@ -220,7 +250,66 @@ class AIAgentRepository(
 
         return tokens.distinct().take(8)
     }
-    
+
+    private fun normalizeColumnKeyForMatch(raw: String): String {
+        return raw
+            .lowercase(Locale.ROOT)
+            .replace(Regex("[^a-z0-9]+"), " ")
+            .trim()
+            .replace(Regex("\\s+"), " ")
+    }
+
+    private fun extractEmails(input: String): List<String> {
+        if (input.isBlank()) return emptyList()
+        return Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}")
+            .findAll(input)
+            .map { it.value.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .take(4)
+            .toList()
+    }
+
+    private fun rowMatchesMatchFields(
+        rowValuesByColumnKey: Map<String, String>,
+        normalizedMatchFields: List<String>,
+        matchTokens: List<String>
+    ): Boolean {
+        if (normalizedMatchFields.isEmpty()) return true
+        if (matchTokens.isEmpty()) return false
+
+        normalizedMatchFields.forEach { fieldKey ->
+            val fieldValue = rowValuesByColumnKey[fieldKey].orEmpty()
+            if (fieldValue.isBlank()) return@forEach
+
+            if (matchTokens.any { token -> valueMatchesToken(fieldValue, token) }) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    private fun valueMatchesToken(fieldValue: String, token: String): Boolean {
+        val candidate = token.trim()
+        if (candidate.isBlank()) return false
+
+        val fieldLower = fieldValue.lowercase(Locale.ROOT)
+        val tokenLower = candidate.lowercase(Locale.ROOT)
+        if (fieldLower == tokenLower) return true
+        if (tokenLower.length >= 3 && fieldLower.contains(tokenLower)) return true
+
+        val fieldDigits = fieldValue.replace(Regex("[^0-9]"), "")
+        val tokenDigits = candidate.replace(Regex("[^0-9]"), "")
+        if (fieldDigits.isNotBlank() && tokenDigits.length >= 6) {
+            if (fieldDigits.contains(tokenDigits) || tokenDigits.contains(fieldDigits)) {
+                return true
+            }
+        }
+
+        return false
+    }
+
     // NEW: Auto-enrich profile from sheet data
     suspend fun enrichProfileFromSheet(phoneNumber: String) {
         try {

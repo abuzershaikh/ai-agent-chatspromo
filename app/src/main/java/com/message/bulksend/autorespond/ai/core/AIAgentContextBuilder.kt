@@ -1,4 +1,4 @@
-﻿package com.message.bulksend.autorespond.ai.core
+package com.message.bulksend.autorespond.ai.core
 
 import android.content.Context
 import com.message.bulksend.autorespond.ai.customsheet.CustomTemplateSheetManager
@@ -2406,7 +2406,8 @@ class AIAgentContextBuilder(
 
                 val templateName =
                         settingsManager.customTemplateName.trim().ifBlank { "Custom AI Template" }
-                val folderName = "AI Agent Data Sheet"
+                val folderName =
+                        settingsManager.customTemplateSheetFolderName.trim().ifBlank { "AI Agent Data Sheet" }
                 val writeMode = settingsManager.customTemplateWriteStorageMode
                 val writeFieldSchema = resolveCustomWriteFieldSchema()
                 val writeFieldNames =
@@ -2424,6 +2425,37 @@ class AIAgentContextBuilder(
                         } else {
                                 referenceSheetName
                         }
+                val defaultReadSheet =
+                        settingsManager.customTemplateReadSheetName.trim().ifBlank {
+                                CustomTemplateSheetManager.DEFAULT_READ_SHEET_NAME
+                        }
+                val defaultWriteSheet =
+                        settingsManager.customTemplateWriteSheetName.trim().ifBlank {
+                                CustomTemplateSheetManager.DEFAULT_WRITE_SHEET_NAME
+                        }
+                val readSheetForExamples = resolvedReferenceSheet ?: defaultReadSheet
+                val writeSheetForExamples = defaultWriteSheet
+                val configuredMatchFields =
+                        settingsManager.customTemplateSheetMatchFields
+                                .split(",")
+                                .map { it.trim() }
+                                .filter { it.isNotBlank() }
+                                .distinctBy { it.lowercase(Locale.ROOT) }
+                val effectiveMatchFields = configuredMatchFields.ifEmpty { listOf("Phone Number") }
+                val primaryMatchField = effectiveMatchFields.first()
+                val emailCandidate =
+                        Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}")
+                                .find(incomingMessage)
+                                ?.value
+                                .orEmpty()
+                val primaryMatchValue =
+                        when {
+                                primaryMatchField.contains("phone", ignoreCase = true) && senderPhone.isNotBlank() -> senderPhone
+                                primaryMatchField.contains("email", ignoreCase = true) -> emailCandidate.ifBlank { "customer@example.com" }
+                                senderPhone.isNotBlank() -> senderPhone
+                                else -> "<value>"
+                        }
+                val matchFieldsLabel = effectiveMatchFields.joinToString(", ")
                 val readSourceMode =
                         if (resolvedReferenceSheet == null) {
                                 "all sheets"
@@ -2439,6 +2471,7 @@ class AIAgentContextBuilder(
                 stringBuilder.append(
                         "Write Tool: ${if (settingsManager.customTemplateEnableSheetWriteTool) "ON" else "OFF"}\n"
                 )
+                stringBuilder.append("Match Fields: $matchFieldsLabel\n")
                 stringBuilder.append("\n")
 
                 val sheetManager = CustomTemplateSheetManager(context)
@@ -2450,6 +2483,7 @@ class AIAgentContextBuilder(
                 val schemaColumns = writeFieldNames.ifEmpty { writeColumns }
                 sheetManager.ensureTemplateSheetSystem(
                         templateName = templateName,
+                        folderNameOverride = folderName,
                         readSheetNameOverride = settingsManager.customTemplateReadSheetName,
                         writeSheetNameOverride = settingsManager.customTemplateWriteSheetName,
                         salesSheetNameOverride = settingsManager.customTemplateSalesSheetName,
@@ -2464,16 +2498,17 @@ class AIAgentContextBuilder(
                                         senderPhone,
                                         incomingMessage,
                                         tableNameFilter = resolvedReferenceSheet,
-                                        allowedFolders = listOf(folderName)
+                                        allowedFolders = listOf(folderName),
+                                        matchFields = effectiveMatchFields
                                 )
 
                         if (allMatches.isNotEmpty()) {
-                                stringBuilder.append("[AI AGENT DATA SHEET MATCHES]\n")
+                                stringBuilder.append("[CUSTOM FOLDER SHEET MATCHES]\n")
                                 stringBuilder.append(
                                         if (resolvedReferenceSheet == null) {
-                                                "Matched by sender phone and query across all sheets in AI Agent Data Sheet folder.\n"
+                                                "Matched by query + configured match fields ($matchFieldsLabel) across all sheets in selected folder '$folderName'.\n"
                                         } else {
-                                                "Matched by sender phone and query in selected sheet '$referenceSheetName'.\n"
+                                                "Matched by query + configured match fields ($matchFieldsLabel) in selected sheet '$referenceSheetName'.\n"
                                         }
                                 )
                                 allMatches.take(20).forEach { row ->
@@ -2492,13 +2527,13 @@ class AIAgentContextBuilder(
                                 "For structured read operations you can use:\n"
                         )
                         stringBuilder.append(
-                                "[SHEET_SELECT: {\"table\":\"Agent Read Sheet\",\"where\":{\"Phone Number\":\"$senderPhone\"},\"columns\":[\"Name\",\"Phone Number\"],\"limit\":1}]\n"
+                                "[SHEET_SELECT: {\"table\":\"$readSheetForExamples\",\"where\":{\"$primaryMatchField\":\"$primaryMatchValue\"},\"columns\":[\"Name\",\"$primaryMatchField\"],\"limit\":1}]\n"
                         )
                         stringBuilder.append(
-                                "[SHEET_AGG: {\"table\":\"Agent Read Sheet\",\"operation\":\"COUNTIF\",\"column\":\"Status\",\"criteria\":\"=PAID\"}]\n"
+                                "[SHEET_AGG: {\"table\":\"$readSheetForExamples\",\"operation\":\"COUNTIF\",\"column\":\"Status\",\"criteria\":\"=PAID\"}]\n"
                         )
                         stringBuilder.append(
-                                "[SHEET_PIVOT: {\"table\":\"Agent Read Sheet\",\"groupBy\":\"Status\",\"operation\":\"COUNT\"}]\n"
+                                "[SHEET_PIVOT: {\"table\":\"$readSheetForExamples\",\"groupBy\":\"Status\",\"operation\":\"COUNT\"}]\n"
                         )
                         stringBuilder.append("\n")
                 }
@@ -2521,19 +2556,19 @@ class AIAgentContextBuilder(
                                 "For structured table operations you can also use:\n"
                         )
                         stringBuilder.append(
-                                "[SHEET_SELECT: {\"table\":\"Agent Read Sheet\",\"where\":{\"Phone Number\":\"$senderPhone\"},\"columns\":[\"Name\",\"Phone Number\"],\"limit\":1}]\n"
+                                "[SHEET_SELECT: {\"table\":\"$readSheetForExamples\",\"where\":{\"$primaryMatchField\":\"$primaryMatchValue\"},\"columns\":[\"Name\",\"$primaryMatchField\"],\"limit\":1}]\n"
                         )
                         stringBuilder.append(
-                                "[SHEET_AGG: {\"table\":\"Agent Write Sheet\",\"operation\":\"COUNTIF\",\"column\":\"Status\",\"criteria\":\"=PAID\"}]\n"
+                                "[SHEET_AGG: {\"table\":\"$writeSheetForExamples\",\"operation\":\"COUNTIF\",\"column\":\"Status\",\"criteria\":\"=PAID\"}]\n"
                         )
                         stringBuilder.append(
-                                "[SHEET_PIVOT: {\"table\":\"Agent Write Sheet\",\"groupBy\":\"Status\",\"operation\":\"COUNT\"}]\n"
+                                "[SHEET_PIVOT: {\"table\":\"$writeSheetForExamples\",\"groupBy\":\"Status\",\"operation\":\"COUNT\"}]\n"
                         )
                         stringBuilder.append(
-                                "[SHEET_UPSERT: {\"table\":\"Agent Write Sheet\",\"key\":{\"Phone Number\":\"$senderPhone\"},\"values\":{\"Last Intent\":\"order_status\"}}]\n"
+                                "[SHEET_UPSERT: {\"table\":\"$writeSheetForExamples\",\"key\":{\"$primaryMatchField\":\"$primaryMatchValue\"},\"values\":{\"Last Intent\":\"order_status\"}}]\n"
                         )
                         stringBuilder.append(
-                                "[SHEET_BULK_UPSERT: {\"table\":\"Agent Write Sheet\",\"keyColumns\":[\"Phone Number\"],\"rows\":[{\"Phone Number\":\"$senderPhone\",\"Last Intent\":\"order_status\",\"Status\":\"ACTIVE\"}]}]\n"
+                                "[SHEET_BULK_UPSERT: {\"table\":\"$writeSheetForExamples\",\"keyColumns\":[\"$primaryMatchField\"],\"rows\":[{\"$primaryMatchField\":\"$primaryMatchValue\",\"Last Intent\":\"order_status\",\"Status\":\"ACTIVE\"}]}]\n"
                         )
                         if (writeMode == AIAgentSettingsManager.SHEET_WRITE_MODE_GOOGLE) {
                                 val targetGoogleSheet =
@@ -3191,14 +3226,3 @@ class AIAgentContextBuilder(
                 return fields.toList()
         }
 }
-
-
-
-
-
-
-
-
-
-
-

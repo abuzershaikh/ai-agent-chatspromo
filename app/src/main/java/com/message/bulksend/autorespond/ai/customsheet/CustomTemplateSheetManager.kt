@@ -9,6 +9,7 @@ import com.message.bulksend.tablesheet.data.models.FolderModel
 import com.message.bulksend.tablesheet.data.models.RowModel
 import com.message.bulksend.tablesheet.data.models.TableModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -52,6 +53,7 @@ class CustomTemplateSheetManager(context: Context) {
 
     suspend fun ensureTemplateSheetSystem(
         templateName: String,
+        folderNameOverride: String? = null,
         readSheetNameOverride: String? = null,
         writeSheetNameOverride: String? = null,
         salesSheetNameOverride: String? = null,
@@ -59,7 +61,7 @@ class CustomTemplateSheetManager(context: Context) {
     ): SheetSetupResult =
         withContext(Dispatchers.IO) {
             val safeTemplateName = normalizeTemplateName(templateName)
-            val folderName = buildFolderName(safeTemplateName)
+            val folderName = normalizeFolderName(folderNameOverride).ifBlank { buildFolderName(safeTemplateName) }
             val folder = ensureFolder(folderName)
 
             val readSheetName = normalizeSheetName(readSheetNameOverride, DEFAULT_READ_SHEET_NAME)
@@ -143,12 +145,51 @@ class CustomTemplateSheetManager(context: Context) {
         tableDao.getTablesByFolderIdSync(folder.id).map { it.name }.sorted()
     }
 
+    suspend fun listColumnNamesInFolder(
+        folderName: String,
+        sheetNameFilter: String? = null
+    ): List<String> = withContext(Dispatchers.IO) {
+        val folder = folderDao.getFolderByName(folderName) ?: return@withContext emptyList()
+        val normalizedFilter = sheetNameFilter?.trim().orEmpty()
+        val tables =
+            tableDao.getTablesByFolderIdSync(folder.id)
+                .filter { table ->
+                    normalizedFilter.isBlank() || table.name.equals(normalizedFilter, ignoreCase = true)
+                }
+
+        if (tables.isEmpty()) return@withContext emptyList()
+
+        val out = linkedSetOf<String>()
+        tables.forEach { table ->
+            columnDao.getColumnsByTableIdSync(table.id)
+                .sortedBy { it.orderIndex }
+                .forEach { column ->
+                    val clean = column.name.trim()
+                    if (clean.isNotBlank()) out += clean
+                }
+        }
+        out.toList()
+    }
+
+    suspend fun listFolderNames(): List<String> = withContext(Dispatchers.IO) {
+        folderDao.getAllFolders().first()
+            .mapNotNull { it.name.trim().takeIf { name -> name.isNotBlank() } }
+            .distinct()
+            .sorted()
+    }
+
+    suspend fun createFolderIfMissing(rawFolderName: String): String = withContext(Dispatchers.IO) {
+        val cleanName = normalizeFolderName(rawFolderName).ifBlank { "AI Agent Data Sheet" }
+        ensureFolder(cleanName).name
+    }
+
     suspend fun getReferenceRowByPhone(
         templateName: String,
         sheetName: String?,
-        phoneNumber: String
+        phoneNumber: String,
+        folderNameOverride: String? = null
     ): SheetRowData? = withContext(Dispatchers.IO) {
-        val setup = ensureTemplateSheetSystem(templateName)
+        val setup = ensureTemplateSheetSystem(templateName, folderNameOverride = folderNameOverride)
         val folder = folderDao.getFolderByName(setup.folderName) ?: return@withContext null
         val targetSheetName = sheetName?.trim().orEmpty().ifBlank { setup.readSheetName }
         val table = ensureSheetByName(folder.id, targetSheetName) ?: return@withContext null
@@ -171,11 +212,12 @@ class CustomTemplateSheetManager(context: Context) {
         phoneNumber: String,
         userName: String,
         fields: Map<String, String>,
-        sourceMessage: String = ""
+        sourceMessage: String = "",
+        folderNameOverride: String? = null
     ): Boolean = withContext(Dispatchers.IO) {
         if (phoneNumber.isBlank()) return@withContext false
 
-        val setup = ensureTemplateSheetSystem(templateName)
+        val setup = ensureTemplateSheetSystem(templateName, folderNameOverride = folderNameOverride)
         val folder = folderDao.getFolderByName(setup.folderName) ?: return@withContext false
         val targetSheetName = sheetName?.trim().orEmpty().ifBlank { setup.writeSheetName }
         val table = ensureSheetByName(folder.id, targetSheetName) ?: createAdhocDataSheet(folder.id, targetSheetName)
@@ -209,11 +251,12 @@ class CustomTemplateSheetManager(context: Context) {
         userName: String,
         userMessage: String,
         aiReply: String,
-        intent: String
+        intent: String,
+        folderNameOverride: String? = null
     ): Boolean = withContext(Dispatchers.IO) {
         if (phoneNumber.isBlank()) return@withContext false
 
-        val setup = ensureTemplateSheetSystem(templateName)
+        val setup = ensureTemplateSheetSystem(templateName, folderNameOverride = folderNameOverride)
         val folder = folderDao.getFolderByName(setup.folderName) ?: return@withContext false
         val writeSheet = ensureSheetByName(folder.id, setup.writeSheetName) ?: return@withContext false
         val rowId = findFirstEmptyRow(writeSheet.id) ?: createRow(writeSheet.id)
@@ -233,7 +276,8 @@ class CustomTemplateSheetManager(context: Context) {
         phoneNumber: String,
         userName: String,
         userMessage: String,
-        intent: String
+        intent: String,
+        folderNameOverride: String? = null
     ): Boolean = withContext(Dispatchers.IO) {
         if (phoneNumber.isBlank()) return@withContext false
         val lower = userMessage.lowercase(Locale.ROOT)
@@ -247,7 +291,7 @@ class CustomTemplateSheetManager(context: Context) {
 
         if (!looksLikeSale) return@withContext false
 
-        val setup = ensureTemplateSheetSystem(templateName)
+        val setup = ensureTemplateSheetSystem(templateName, folderNameOverride = folderNameOverride)
         val folder = folderDao.getFolderByName(setup.folderName) ?: return@withContext false
         val salesSheet = ensureSheetByName(folder.id, setup.salesSheetName) ?: return@withContext false
         val rowId = findFirstEmptyRow(salesSheet.id) ?: createRow(salesSheet.id)
@@ -264,6 +308,14 @@ class CustomTemplateSheetManager(context: Context) {
     fun buildFolderName(templateName: String): String {
         val safeTemplate = normalizeTemplateName(templateName)
         return "$FOLDER_PREFIX - $safeTemplate"
+    }
+
+    private fun normalizeFolderName(rawFolderName: String?): String {
+        return rawFolderName.orEmpty()
+            .trim()
+            .replace(Regex("[^A-Za-z0-9 _-]"), " ")
+            .replace(Regex("\\s+"), " ")
+            .take(64)
     }
 
     private suspend fun ensureFolder(folderName: String): FolderModel {

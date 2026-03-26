@@ -1,4 +1,4 @@
-﻿package com.message.bulksend.autorespond.ai.ui.customai
+package com.message.bulksend.autorespond.ai.ui.customai
 
 import android.content.Intent
 import android.util.Log
@@ -54,6 +54,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 private const val DEFAULT_CUSTOM_FIELD_TYPE = "Text"
+private const val DEFAULT_LEGACY_AGENT_FOLDER = "AI Agent Data Sheet"
 
 internal data class CustomWriteFieldSpec(
     val name: String,
@@ -65,6 +66,11 @@ internal data class GoogleSpreadsheetOption(
     val title: String
 )
 
+
+internal data class SheetColumnSummary(
+    val sheetName: String,
+    val columns: List<String>
+)
 private val customWriteFieldTypes = listOf(
     "Text",
     "Number",
@@ -195,6 +201,9 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
     var salesSheetName by rememberSaveable {
         mutableStateOf(settingsManager.customTemplateSalesSheetName)
     }
+    var sheetMatchFields by rememberSaveable {
+        mutableStateOf(settingsManager.customTemplateSheetMatchFields)
+    }
     var writeStorageMode by rememberSaveable {
         mutableStateOf(settingsManager.customTemplateWriteStorageMode)
     }
@@ -223,11 +232,14 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
         }
 
     var setupInProgress by rememberSaveable { mutableStateOf(false) }
+    var availableSheetFolderNames by remember { mutableStateOf(listOf<String>()) }
+    var availableFolderSheetNames by remember { mutableStateOf(listOf<String>()) }
     var availableReferenceSheetNames by remember { mutableStateOf(listOf("All Sheets")) }
+    var availableMatchFieldOptions by remember { mutableStateOf(listOf<String>()) }
+    var sheetColumnSummaries by remember { mutableStateOf(listOf<SheetColumnSummary>()) }
     var availableGoogleSpreadsheetOptions by remember { mutableStateOf(listOf<GoogleSpreadsheetOption>()) }
     var availableGoogleWriteSheetNames by remember { mutableStateOf(listOf<String>()) }
     var googleWriteSheetStatus by rememberSaveable { mutableStateOf("") }
-    val referenceSheetFolderName = "AI Agent Data Sheet"
     val lifecycleOwner = LocalLifecycleOwner.current
 
     val resolvedTemplateName = templateName.trim().ifBlank { "Custom AI Template" }
@@ -259,9 +271,14 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
                     .filter { it.name.isNotBlank() }
                     .distinctBy { it.name.lowercase() }
             val cleanNames = cleanFields.map { it.name }
+            val linkedFolderName =
+                sheetFolderName.trim()
+                    .ifBlank { settingsManager.customTemplateSheetFolderName.trim() }
+                    .ifBlank { sheetManager.buildFolderName(resolvedTemplateName) }
             val setup =
                 sheetManager.ensureTemplateSheetSystem(
                     templateName = resolvedTemplateName,
+                    folderNameOverride = linkedFolderName,
                     readSheetNameOverride = readSheetName,
                     writeSheetNameOverride = writeSheetName,
                     salesSheetNameOverride = salesSheetName,
@@ -284,31 +301,218 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
         setupInProgress = false
     }
 
-    suspend fun syncReferenceSheetOptions() {
-        val sheetNames =
-            runCatching {
-                sheetManager.listSheetNamesInFolder(referenceSheetFolderName)
-            }.getOrElse { emptyList() }
+    suspend fun collectManualMatchFieldFallbackColumns(): List<String> {
+        val folders =
+            runCatching { sheetManager.listFolderNames() }
+                .getOrElse { emptyList() }
                 .mapNotNull { it.trim().takeIf { name -> name.isNotBlank() } }
+                .filterNot { it.equals(DEFAULT_LEGACY_AGENT_FOLDER, ignoreCase = true) }
+                .distinctBy { it.lowercase() }
+
+        if (folders.isEmpty()) return emptyList()
+
+        val merged = mutableListOf<String>()
+        folders.forEach { folder ->
+            val cols = runCatching { sheetManager.listColumnNamesInFolder(folder, null) }.getOrElse { emptyList() }
+            merged.addAll(cols)
+        }
+        return sanitizeMatchFieldOptions(merged)
+    }
+
+    suspend fun collectSheetColumnSummaries(
+        folderName: String,
+        sheetNames: List<String>
+    ): List<SheetColumnSummary> {
+        if (folderName.isBlank() || sheetNames.isEmpty()) return emptyList()
+
+        val summaries = mutableListOf<SheetColumnSummary>()
+        sheetNames.forEach { sheetName ->
+            val cols =
+                runCatching { sheetManager.listColumnNamesInFolder(folderName, sheetName) }
+                    .getOrElse { emptyList() }
+            summaries.add(
+                SheetColumnSummary(
+                    sheetName = sheetName,
+                    columns = sanitizeMatchFieldOptions(cols)
+                )
+            )
+        }
+        return summaries
+    }
+
+    suspend fun syncReferenceSheetOptions() {
+        val selectedFolder =
+            sheetFolderName.trim()
+                .ifBlank { settingsManager.customTemplateSheetFolderName.trim() }
+
+        if (selectedFolder.isBlank()) {
+            availableFolderSheetNames = emptyList()
+            availableReferenceSheetNames = listOf("All Sheets")
+            referenceSheetName = "All Sheets"
+            settingsManager.customTemplateReferenceSheetName = "All Sheets"
+            availableMatchFieldOptions = emptyList()
+            sheetColumnSummaries = emptyList()
+            return
+        }
+
+        sheetFolderName = selectedFolder
+        settingsManager.customTemplateSheetFolderName = selectedFolder
+
+        val sheetNames =
+            runCatching { sheetManager.listSheetNamesInFolder(selectedFolder) }
+                .getOrElse { emptyList() }
+                .mapNotNull { it.trim().takeIf { name -> name.isNotBlank() } }
+                .distinctBy { it.lowercase() }
+                .sortedBy { it.lowercase() }
+
+        availableFolderSheetNames = sheetNames
+        sheetColumnSummaries = collectSheetColumnSummaries(selectedFolder, sheetNames)
+
+        val fallbackReference =
+            when {
+                sheetNames.isEmpty() -> "All Sheets"
+                referenceSheetName.equals("All Sheets", ignoreCase = true) -> "All Sheets"
+                settingsManager.customTemplateReferenceSheetName.equals("All Sheets", ignoreCase = true) -> "All Sheets"
+                sheetNames.any { it.equals(referenceSheetName, ignoreCase = true) } ->
+                    sheetNames.first { it.equals(referenceSheetName, ignoreCase = true) }
+                sheetNames.any { it.equals(settingsManager.customTemplateReferenceSheetName, ignoreCase = true) } ->
+                    sheetNames.first { it.equals(settingsManager.customTemplateReferenceSheetName, ignoreCase = true) }
+                else -> "All Sheets"
+            }
+
+        availableReferenceSheetNames = listOf("All Sheets") + sheetNames
+        referenceSheetName = fallbackReference
+        settingsManager.customTemplateReferenceSheetName = fallbackReference
+
+        val sheetFilter =
+            fallbackReference.trim().takeIf {
+                it.isNotBlank() && !it.equals("All Sheets", ignoreCase = true)
+            }
+
+        val allFolderColumns =
+            runCatching { sheetManager.listColumnNamesInFolder(selectedFolder, null) }
+                .getOrElse { emptyList() }
+        val filteredColumns =
+            runCatching { sheetManager.listColumnNamesInFolder(selectedFolder, sheetFilter) }
+                .getOrElse { emptyList() }
+
+        val resolvedColumns =
+            sanitizeMatchFieldOptions(
+                if (sheetFilter == null) allFolderColumns else filteredColumns + allFolderColumns
+            )
+        val manualFallbackColumns =
+            if (resolvedColumns.size > 1) {
+                emptyList()
+            } else {
+                collectManualMatchFieldFallbackColumns()
+            }
+        val finalColumns = sanitizeMatchFieldOptions(resolvedColumns + manualFallbackColumns)
+        availableMatchFieldOptions = finalColumns
+
+        Log.d(
+            "CustomAIAgentSheet",
+            "syncReference folder=$selectedFolder sheets=${sheetNames.size} summarySheets=${sheetColumnSummaries.size} reference=$fallbackReference finalColumns=${finalColumns.size} cols=${finalColumns.joinToString(" | ").take(240)}"
+        )
+
+        val reconciledFields = reconcileMatchFields(sheetMatchFields, finalColumns)
+        if (sheetMatchFields != reconciledFields) {
+            sheetMatchFields = reconciledFields
+            settingsManager.customTemplateSheetMatchFields = reconciledFields
+        }
+    }
+
+    suspend fun syncMatchFieldOptions(
+        selectedFolder: String = sheetFolderName,
+        selectedReferenceSheet: String = referenceSheetName
+    ) {
+        val cleanFolder = selectedFolder.trim()
+        if (cleanFolder.isBlank()) {
+            availableMatchFieldOptions = emptyList()
+            sheetColumnSummaries = emptyList()
+            return
+        }
+
+        val sheetFilter =
+            selectedReferenceSheet.trim().takeIf {
+                it.isNotBlank() && !it.equals("All Sheets", ignoreCase = true)
+            }
+
+        val allFolderColumns =
+            runCatching { sheetManager.listColumnNamesInFolder(cleanFolder, null) }
+                .getOrElse { emptyList() }
+        val filteredColumns =
+            runCatching { sheetManager.listColumnNamesInFolder(cleanFolder, sheetFilter) }
+                .getOrElse { emptyList() }
+
+        val columns =
+            sanitizeMatchFieldOptions(
+                if (sheetFilter == null) allFolderColumns else filteredColumns + allFolderColumns
+            )
+        val manualFallbackColumns =
+            if (columns.size > 1) {
+                emptyList()
+            } else {
+                collectManualMatchFieldFallbackColumns()
+            }
+        val finalColumns = sanitizeMatchFieldOptions(columns + manualFallbackColumns)
+        availableMatchFieldOptions = finalColumns
+
+        Log.d(
+            "CustomAIAgentSheet",
+            "syncMatch folder=$cleanFolder reference=$selectedReferenceSheet finalColumns=${finalColumns.size} cols=${finalColumns.joinToString(" | ").take(240)}"
+        )
+
+        val reconciledFields = reconcileMatchFields(sheetMatchFields, finalColumns)
+        if (sheetMatchFields != reconciledFields) {
+            sheetMatchFields = reconciledFields
+            settingsManager.customTemplateSheetMatchFields = reconciledFields
+        }
+    }
+    suspend fun syncSheetFolderOptions() {
+        val folders =
+            runCatching { sheetManager.listFolderNames() }
+                .getOrElse { emptyList() }
+                .mapNotNull { it.trim().takeIf { name -> name.isNotBlank() } }
+                .filterNot { it.equals(DEFAULT_LEGACY_AGENT_FOLDER, ignoreCase = true) }
                 .distinct()
                 .sorted()
 
-        val fallback =
+        availableSheetFolderNames = folders
+
+        val preferred =
+            sheetFolderName.trim().ifBlank { settingsManager.customTemplateSheetFolderName.trim() }
+        val resolvedFolder =
             when {
-                sheetNames.isEmpty() -> "All Sheets"
-                settingsManager.customTemplateReferenceSheetName.equals(
-                    "All Sheets",
-                    ignoreCase = true
-                ) || settingsManager.customTemplateReferenceSheetName.isBlank() -> "All Sheets"
-                sheetNames.any {
-                    it.equals(settingsManager.customTemplateReferenceSheetName, ignoreCase = true)
-                } -> settingsManager.customTemplateReferenceSheetName
-                else -> sheetNames.first()
+                preferred.isNotBlank() && folders.any { it.equals(preferred, ignoreCase = true) } ->
+                    folders.first { it.equals(preferred, ignoreCase = true) }
+                preferred.equals(DEFAULT_LEGACY_AGENT_FOLDER, ignoreCase = true) -> ""
+                else -> ""
             }
-        availableReferenceSheetNames =
-            listOf("All Sheets") + sheetNames
-        referenceSheetName = fallback
-        settingsManager.customTemplateReferenceSheetName = fallback
+
+        sheetFolderName = resolvedFolder
+        settingsManager.customTemplateSheetFolderName = resolvedFolder
+        syncReferenceSheetOptions()
+    }
+
+    suspend fun createLinkedFolder(rawFolderName: String) {
+        val cleanName = rawFolderName.trim()
+        if (cleanName.isBlank()) {
+            snackbarHostState.showSnackbar("Folder name required")
+            return
+        }
+
+        val createdName =
+            runCatching { sheetManager.createFolderIfMissing(cleanName) }
+                .onFailure { snackbarHostState.showSnackbar("Folder create failed: ${it.message}") }
+                .getOrNull()
+                .orEmpty()
+
+        if (createdName.isBlank()) return
+
+        sheetFolderName = createdName
+        settingsManager.customTemplateSheetFolderName = createdName
+        syncSheetFolderOptions()
+        snackbarHostState.showSnackbar("Linked folder: $createdName")
     }
 
     suspend fun refreshGoogleConnectionSummary() {
@@ -522,7 +726,7 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
                     autonomousMaxGoalsPerRunText = settingsManager.customTemplateAutonomousMaxGoalsPerRun.toString()
                     conversationHistoryLimitText = settingsManager.customTemplateConversationHistoryLimit.toString()
                     scope.launch {
-                        syncReferenceSheetOptions()
+                        syncSheetFolderOptions()
                         refreshGoogleConnectionSummary()
                     }
                     refreshAutonomousStatus()
@@ -533,7 +737,7 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
     }
 
     LaunchedEffect(Unit) {
-        syncReferenceSheetOptions()
+        syncSheetFolderOptions()
         refreshGoogleConnectionSummary()
         persistWriteFields()
         refreshAutonomousStatus()
@@ -655,7 +859,7 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
                                     settingsManager.activeTemplate = "CUSTOM"
                                     scope.launch {
                                         setupSheets(showSnackbar = false)
-                                        syncReferenceSheetOptions()
+                                        syncSheetFolderOptions()
                                         snackbarHostState.showSnackbar("Custom template enabled.")
                                     }
                                 } else {
@@ -772,7 +976,7 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
                                     if (writeStorageMode == AIAgentSettingsManager.SHEET_WRITE_MODE_TABLE) {
                                         persistWriteFields()
                                         setupSheets(showSnackbar = true)
-                                        syncReferenceSheetOptions()
+                                        syncSheetFolderOptions()
                                     } else {
                                         context.startActivity(
                                             Intent(context, SheetConnectSetupActivity::class.java)
@@ -783,7 +987,7 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
                             onOpenAIDataFolderClick = {
                                 context.startActivity(
                                     Intent(context, TableSheetActivity::class.java).apply {
-                                        putExtra("openFolder", referenceSheetFolderName)
+                                        putExtra("openFolder", "AI Agent Data Sheet")
                                     }
                                 )
                             },
@@ -952,6 +1156,59 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
                                 context.startActivity(Intent(context, NeedDiscoveryActivity::class.java))
                             }
                         )
+
+                    CustomAIAgentTab.SHEET ->                        CustomAIAgentSheetTab(
+                            linkedFolderName = sheetFolderName,
+                            availableFolderNames = availableSheetFolderNames,
+                            availableReferenceSheetNames = availableReferenceSheetNames,
+                            linkedReferenceSheetName = referenceSheetName,
+                            linkedMatchFields = sheetMatchFields,
+                            availableMatchFieldOptions = availableMatchFieldOptions,
+                            sheetColumnSummaries = sheetColumnSummaries,
+                            onFolderNameChange = { folder ->
+                                sheetFolderName = folder
+                                settingsManager.customTemplateSheetFolderName = folder
+                                scope.launch { syncReferenceSheetOptions() }
+                            },
+                            onReferenceSheetNameChange = { sheet ->
+                                referenceSheetName = sheet
+                                settingsManager.customTemplateReferenceSheetName = sheet
+                                scope.launch { syncMatchFieldOptions() }
+                            },
+                            onMatchFieldsChange = { raw ->
+                                val single =
+                                    raw.split(",")
+                                        .map { it.trim() }
+                                        .firstOrNull { it.isNotBlank() }
+                                        .orEmpty()
+                                sheetMatchFields = single
+                                settingsManager.customTemplateSheetMatchFields = single
+                            },
+                            onAddMatchFieldFromSheet = { field ->
+                                val single = field.trim()
+                                sheetMatchFields = single
+                                settingsManager.customTemplateSheetMatchFields = single
+                            },
+                            onCreateFolder = { folderName ->
+                                scope.launch { createLinkedFolder(folderName) }
+                            },
+                            onOpenTableSheet = {
+                                val folderToOpen = sheetFolderName.trim()
+                                context.startActivity(
+                                    Intent(context, TableSheetActivity::class.java).apply {
+                                        if (folderToOpen.isNotBlank()) {
+                                            putExtra("openFolder", folderToOpen)
+                                        }
+                                    }
+                                )
+                            },
+                            onRefresh = {
+                                scope.launch {
+                                    syncSheetFolderOptions()
+                                    snackbarHostState.showSnackbar("Sheet links refreshed.")
+                                }
+                            }
+                        )
                 }
             }
         }
@@ -1048,6 +1305,30 @@ private fun buildWriteFieldSchemaJson(fields: List<CustomWriteFieldSpec>): Strin
     }
     return arr.toString()
 }
+
+private fun sanitizeMatchFieldOptions(rawColumns: List<String>): List<String> {
+    return rawColumns
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .distinctBy { it.lowercase() }
+        .sortedBy { it.lowercase() }
+}
+
+private fun reconcileMatchFields(existingRaw: String, availableOptions: List<String>): String {
+    if (availableOptions.isEmpty()) return ""
+
+    val normalizedMap =
+        availableOptions.associateBy { option -> option.trim().lowercase() }
+
+    return existingRaw.split(",")
+        .map { it.trim() }
+        .firstOrNull { it.isNotBlank() }
+        ?.let { token -> normalizedMap[token.lowercase()] }
+        .orEmpty()
+}
+
+
+
 
 
 

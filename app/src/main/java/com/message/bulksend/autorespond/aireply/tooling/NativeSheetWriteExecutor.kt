@@ -101,7 +101,8 @@ class NativeSheetWriteExecutor(
             phoneNumber = senderPhone,
             userName = senderName,
             fields = payload,
-            sourceMessage = sourceMessage
+            sourceMessage = sourceMessage,
+            folderNameOverride = settings.customTemplateSheetFolderName
         )
     }
 

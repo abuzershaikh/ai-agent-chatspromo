@@ -1,4 +1,4 @@
-﻿package com.message.bulksend.autorespond
+package com.message.bulksend.autorespond
 
 import android.app.Notification
 import android.content.Context
@@ -1112,27 +1112,31 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                 return
             }
             
-            // NEW: Check for Reverse AI Text Owner Interception
-            val reverseAIManager = com.message.bulksend.aiagent.tools.reverseai.ReverseAIManager(this)
-            // Use phoneNumber or senderName if phone is unknown
-            val ownerCheckId = if (phoneNumber.isNotEmpty() && phoneNumber != "Unknown") phoneNumber else senderNameOverride ?: ""
-            if (reverseAIManager.isMessageFromOwner(ownerCheckId)) {
-                Log.d(TAG, "Ã°Å¸â€ž Text message is from Owner ($ownerCheckId)! Diverting to Reverse AI.")
-                
-                // Launch coroutine to process AI request without blocking the listener
-                    serviceScope.launch {
-                        val responseMsg = reverseAIManager.processOwnerInstruction(incomingMessage)
-                        messageRepository.updateMessageWithReply(messageId, responseMsg, "SENT")
-                        sendReplyViaNotificationNoDelay(
-                            sbn = sbn,
-                            replyText = responseMsg,
-                            messageId = messageId,
-                            senderIdentifier = ownerCheckId
-                        )
-                    }
-                    return
+            // NEW: Check for Owner Assist text interception (strict owner-number only)
+            val ownerAssistManager = com.message.bulksend.aiagent.tools.ownerassist.OwnerAssistManager(this)
+            val ownerCheckPhone =
+                if (phoneNumber.isNotEmpty() && !phoneNumber.equals("Unknown", ignoreCase = true)) {
+                    phoneNumber
+                } else {
+                    ""
                 }
-            // END Reverse AI Owner Interception
+            if (ownerAssistManager.isAuthorizedOwner(ownerCheckPhone)) {
+                Log.d(TAG, "Ã°Å¸â€ž Text message is from Owner ($ownerCheckPhone)! Diverting to Owner Assist.")
+
+                // Launch coroutine to process AI request without blocking the listener
+                serviceScope.launch {
+                    val responseMsg = ownerAssistManager.processOwnerInstruction(incomingMessage)
+                    messageRepository.updateMessageWithReply(messageId, responseMsg, "SENT")
+                    sendReplyViaNotificationNoDelay(
+                        sbn = sbn,
+                        replyText = responseMsg,
+                        messageId = messageId,
+                        senderIdentifier = ownerCheckPhone
+                    )
+                }
+                return
+            }
+            // END Owner Assist Owner Interception
 
             // Check if auto-respond is enabled
             val autoRespondManager = AutoRespondManager(this)

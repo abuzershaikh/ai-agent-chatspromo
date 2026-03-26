@@ -146,7 +146,7 @@ internal fun CustomAIAgentSettingsTab(
             ) {
                 // Subtitle
                 Text(
-                    "Select which sheet inside AI Agent Data Sheet to read.",
+                    "Select which linked folder sheet to read.",
                     color = TextSecondary,
                     fontSize = 12.sp,
                     lineHeight = 17.sp
