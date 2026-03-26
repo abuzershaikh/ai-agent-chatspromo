@@ -25,7 +25,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-// ── Dark-theme color palette shared across this screen ──────────────────────
+// Dark-theme color palette shared across this screen
 private val BgDeep       = Color(0xFF0A0F1E)
 private val BgCard       = Color(0xFF111827)
 private val BgCardAlt    = Color(0xFF0F172A)
@@ -84,16 +84,11 @@ internal fun CustomAIAgentSettingsTab(
     onOpenGoogleSetupClick: () -> Unit
 ) {
     val tableMode = writeStorageMode == "TABLE_SHEET"
-    var readSourceMenuExpanded by remember { mutableStateOf(false) }
     var spreadsheetSourceMenuExpanded by remember { mutableStateOf(false) }
     var writeTargetSheetMenuExpanded by remember { mutableStateOf(false) }
-    val effectiveReferenceSheetName = referenceSheetName.ifBlank { "All Sheets" }
     val effectiveConnectedGoogleSheetName = connectedGoogleSheetName.ifBlank { "No Google file connected" }
-    val effectiveConnectedGoogleSheetId = connectedGoogleSheetId.ifBlank { "—" }
+    val effectiveConnectedGoogleSheetId = connectedGoogleSheetId.ifBlank { "Not connected" }
     val effectiveSelectedTabName = selectedGoogleWriteSheetName.ifBlank { "No sheet tab selected" }
-    val safeReferenceList =
-        if (availableReferenceSheetNames.isEmpty()) listOf("All Sheets")
-        else availableReferenceSheetNames
     val safeWriteSheetList =
         if (availableGoogleWriteSheetNames.isEmpty()) listOf("Select sheet from connection")
         else availableGoogleWriteSheetNames
@@ -116,10 +111,10 @@ internal fun CustomAIAgentSettingsTab(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
 
-        // ── Header ───────────────────────────────────────────────────────────
+        // Header
         item { SettingsHeader() }
 
-        // ── Activate Toggle ──────────────────────────────────────────────────
+        // Activate Toggle
         item {
             SettingsSectionCard(
                 title = "Template Status",
@@ -137,63 +132,19 @@ internal fun CustomAIAgentSettingsTab(
             }
         }
 
-        // ── Sheet Settings ───────────────────────────────────────────────────
+        // Sheet Settings
         item {
             SettingsSectionCard(
                 title = "Sheet Settings",
                 icon = Icons.Default.Sync,
                 accentColor = AccentBlue
             ) {
-                // Subtitle
                 Text(
-                    "Select which linked folder sheet to read.",
+                    "Read source sheet is configured in the Sheet tab.",
                     color = TextSecondary,
                     fontSize = 12.sp,
                     lineHeight = 17.sp
                 )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // Read Source dropdown
-                Box {
-                    SettingsTextField(
-                        value = effectiveReferenceSheetName,
-                        onValueChange = {},
-                        label = "Read source sheet",
-                        readOnly = true,
-                        accentColor = AccentBlue,
-                        trailingIcon = {
-                            Icon(
-                                Icons.Default.ArrowDropDown,
-                                contentDescription = null,
-                                tint = AccentBlue
-                            )
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { readSourceMenuExpanded = true }
-                    )
-                    DropdownMenu(
-                        expanded = readSourceMenuExpanded,
-                        onDismissRequest = { readSourceMenuExpanded = false },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color(0xFF1E293B))
-                    ) {
-                        safeReferenceList.forEach { sheetName ->
-                            DropdownMenuItem(
-                                text = {
-                                    Text(sheetName, color = TextPrimary, fontSize = 14.sp)
-                                },
-                                onClick = {
-                                    onReferenceSheetNameChange(sheetName)
-                                    readSourceMenuExpanded = false
-                                },
-                                modifier = Modifier.background(Color(0xFF1E293B))
-                            )
-                        }
-                    }
-                }
 
                 // Write destination chips
                 Text(
@@ -548,7 +499,7 @@ internal fun CustomAIAgentSettingsTab(
             }
         }
 
-        // ── Write Fields ─────────────────────────────────────────────────────
+        // Write Fields
         item {
             SettingsSectionCard(
                 title = "Write Fields",
@@ -670,7 +621,7 @@ internal fun CustomAIAgentSettingsTab(
             }
         }
 
-        // ── Step Repeat Counter ───────────────────────────────────────────────
+        // Step Repeat Counter
         item {
             SettingsSectionCard(
                 title = "Step Repeat Counter",
@@ -740,7 +691,7 @@ internal fun CustomAIAgentSettingsTab(
     }
 }
 
-// ─── Header ─────────────────────────────────────────────────────────────────
+// Header
 @Composable
 private fun SettingsHeader() {
     Box(
@@ -788,7 +739,7 @@ private fun SettingsHeader() {
     }
 }
 
-// ─── Section Card wrapper ────────────────────────────────────────────────────
+// Section Card wrapper
 @Composable
 private fun SettingsSectionCard(
     title: String,
@@ -826,7 +777,7 @@ private fun SettingsSectionCard(
     }
 }
 
-// ─── Styled OutlinedTextField ────────────────────────────────────────────────
+// Styled OutlinedTextField
 @Composable
 private fun SettingsTextField(
     value: String,
@@ -875,7 +826,7 @@ private fun SettingsTextField(
     )
 }
 
-// ─── Styled FilterChip ───────────────────────────────────────────────────────
+// Styled FilterChip
 @Composable
 private fun StyledFilterChip(
     selected: Boolean,
@@ -903,3 +854,5 @@ private fun StyledFilterChip(
         )
     }
 }
+
+
