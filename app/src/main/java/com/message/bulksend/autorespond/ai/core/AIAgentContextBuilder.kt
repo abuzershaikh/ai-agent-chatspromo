@@ -1,4 +1,4 @@
-package com.message.bulksend.autorespond.ai.core
+﻿package com.message.bulksend.autorespond.ai.core
 
 import android.content.Context
 import com.message.bulksend.autorespond.ai.customsheet.CustomTemplateSheetManager
@@ -43,7 +43,7 @@ class AIAgentContextBuilder(
                 withContext(Dispatchers.IO) {
                         android.util.Log.d(
                                 "AIContextBuilder",
-                                "ðŸ”§ Building context for: $senderName ($senderPhone)"
+                                "Ã°Å¸â€Â§ Building context for: $senderName ($senderPhone)"
                         )
                         val stringBuilder = StringBuilder()
 
@@ -51,7 +51,7 @@ class AIAgentContextBuilder(
                                 // 0. Global Date/Time Context (FIRST - Most Important)
                                 android.util.Log.d(
                                         "AIContextBuilder",
-                                        "ðŸ“… Adding date/time context"
+                                        "Ã°Å¸â€œâ€¦ Adding date/time context"
                                 )
                                 stringBuilder.append(
                                         com.message.bulksend.utils.DateTimeHelper
@@ -61,7 +61,7 @@ class AIAgentContextBuilder(
                                 // 1. System Instruction & Identity
                                 android.util.Log.d(
                                         "AIContextBuilder",
-                                        "ðŸ¤– Adding system instructions"
+                                        "Ã°Å¸Â¤â€“ Adding system instructions"
                                 )
                                 stringBuilder.append(
                                         "\nsystem: You are ${settingsManager.agentName}, a helpful AI assistant.\n"
@@ -92,7 +92,7 @@ class AIAgentContextBuilder(
                                 // Clinic Template Context
                                 android.util.Log.d(
                                         "AIContextBuilder",
-                                        "ðŸ¥ Checking clinic context"
+                                        "Ã°Å¸ÂÂ¥ Checking clinic context"
                                 )
                                 val clinicGenerator = ClinicContextGenerator(context)
                                 val clinicPrompt = clinicGenerator.generatePrompt(senderPhone)
@@ -103,7 +103,7 @@ class AIAgentContextBuilder(
                                 stringBuilder.append("\n")
 
                                 // 2. User Profile Context
-                                android.util.Log.d("AIContextBuilder", "ðŸ‘¤ Fetching user profile")
+                                android.util.Log.d("AIContextBuilder", "Ã°Å¸â€˜Â¤ Fetching user profile")
                                 val userProfile = repository.getUserProfile(senderPhone)
                                 val userName = userProfile?.name
                                 val isNameUnknown =
@@ -129,18 +129,18 @@ class AIAgentContextBuilder(
                                 val includeProductContext = shouldIncludeProductContext()
                                 android.util.Log.d(
                                         "AIContextBuilder",
-                                        "ðŸ“¦ Checking product lookup (base=${settingsManager.enableProductLookup}, include=$includeProductContext)"
+                                        "Ã°Å¸â€œÂ¦ Checking product lookup (base=${settingsManager.enableProductLookup}, include=$includeProductContext)"
                                 )
                                 if (includeProductContext) {
                                         android.util.Log.d(
                                                 "AIContextBuilder",
-                                                "ðŸ“¦ Fetching products for context"
+                                                "Ã°Å¸â€œÂ¦ Fetching products for context"
                                         )
 
                                         val products = resolveProductsForContext(incomingMessage)
                                         android.util.Log.d(
                                                 "AIContextBuilder",
-                                                "ðŸ“¦ Context products selected: ${products.size}"
+                                                "Ã°Å¸â€œÂ¦ Context products selected: ${products.size}"
                                         )
                                         if (products.isNotEmpty()) {
                                                 val catalogueRepo = CatalogueRepository(context)
@@ -201,10 +201,10 @@ class AIAgentContextBuilder(
                                                         "     'Here are our products:\n"
                                                 )
                                                 stringBuilder.append(
-                                                        "     1. iPhone 15 - â‚¹70,000\n"
+                                                        "     1. iPhone 15 - Ã¢â€šÂ¹70,000\n"
                                                 )
                                                 stringBuilder.append(
-                                                        "     2. MacBook Pro - â‚¹1,50,000\n"
+                                                        "     2. MacBook Pro - Ã¢â€šÂ¹1,50,000\n"
                                                 )
                                                 stringBuilder.append(
                                                         "     Reply with a product name to see details.'\n"
@@ -259,13 +259,13 @@ class AIAgentContextBuilder(
                                                 stringBuilder.append("\n")
                                                 android.util.Log.d(
                                                         "AIContextBuilder",
-                                                        "ðŸ“¦ Product context added"
+                                                        "Ã°Å¸â€œÂ¦ Product context added"
                                                 )
                                         }
                                 } else {
                                         android.util.Log.d(
                                                 "AIContextBuilder",
-                                                "ðŸ“¦ Product context disabled"
+                                                "Ã°Å¸â€œÂ¦ Product context disabled"
                                         )
                                 }
 
@@ -273,7 +273,7 @@ class AIAgentContextBuilder(
                                 if (shouldIncludePaymentContext()) {
                                         android.util.Log.d(
                                                 "AIContextBuilder",
-                                                "ðŸ’³ Fetching payment methods"
+                                                "Ã°Å¸â€™Â³ Fetching payment methods"
                                         )
                                         val paymentIntegration =
                                                 com.message.bulksend.aiagent.tools.ecommerce
@@ -282,7 +282,7 @@ class AIAgentContextBuilder(
                                                 paymentIntegration.getPaymentMethodsListForAI()
                                         android.util.Log.d(
                                                 "AIContextBuilder",
-                                                "ðŸ’³ Payment methods fetched"
+                                                "Ã°Å¸â€™Â³ Payment methods fetched"
                                         )
 
                                         if (paymentMethodsText.contains("Available Payment Methods:")) {
@@ -345,14 +345,14 @@ class AIAgentContextBuilder(
                                         stringBuilder.append("\n")
                                         android.util.Log.d(
                                                 "AIContextBuilder",
-                                                "ðŸ’³ Payment context added"
+                                                "Ã°Å¸â€™Â³ Payment context added"
                                         )
 
                                         // 3.6 Payment Verification Link Context
                                         if (shouldIncludePaymentVerificationContext()) {
                                                 android.util.Log.d(
                                                         "AIContextBuilder",
-                                                        "✅ Checking payment verification link"
+                                                        "âœ… Checking payment verification link"
                                                 )
                                                 try {
                                                 var recentNonRazorpayPaymentFlow = false
@@ -365,7 +365,7 @@ class AIAgentContextBuilder(
                                                 if (paymentVerifyIntegration.isEnabled()) {
                                                         android.util.Log.d(
                                                                 "AIContextBuilder",
-                                                                "✅ Payment verification enabled"
+                                                                "âœ… Payment verification enabled"
                                                         )
 
                                                         // Check if payment details/QR was sent in
@@ -469,7 +469,7 @@ class AIAgentContextBuilder(
                                                                         stringBuilder.append("\n")
                                                                 } else {
                                                                 stringBuilder.append(
-                                                                        "\n[🚨 CRITICAL PAYMENT INSTRUCTION - RAZORPAY ACTIVE 🚨]\n"
+                                                                        "\n[ðŸš¨ CRITICAL PAYMENT INSTRUCTION - RAZORPAY ACTIVE ðŸš¨]\n"
                                                                 )
                                                                 stringBuilder.append(
                                                                         "You are using RAZORPAY for payments.\n"
@@ -501,27 +501,27 @@ class AIAgentContextBuilder(
                                                 } catch (e: Exception) {
                                                         android.util.Log.e(
                                                                 "AIContextBuilder",
-                                                                "❌ Error adding global safeguard: ${e.message}"
+                                                                "âŒ Error adding global safeguard: ${e.message}"
                                                         )
                                                 }
                                                 } catch (e: Exception) {
                                                         android.util.Log.e(
                                                                 "AIContextBuilder",
-                                                                "❌ Error adding payment verification: ${e.message}",
+                                                                "âŒ Error adding payment verification: ${e.message}",
                                                                 e
                                                         )
                                                 }
                                         } else {
                                                 android.util.Log.d(
                                                         "AIContextBuilder",
-                                                        "✅ Payment verification context disabled for custom template"
+                                                        "âœ… Payment verification context disabled for custom template"
                                                 )
                                         }
 
                                         // 3.7 Dynamic Razorpay Link Generation Context
                                         android.util.Log.d(
                                                 "AIContextBuilder",
-                                                "ðŸ’³ Checking Razorpay configuration for dynamic links"
+                                                "Ã°Å¸â€™Â³ Checking Razorpay configuration for dynamic links"
                                         )
                                         try {
                                                 val razorpayManager =
@@ -551,7 +551,7 @@ class AIAgentContextBuilder(
                                                         ) {
                                                                 android.util.Log.d(
                                                                         "AIContextBuilder",
-                                                                        "ðŸ’³ Link ${latestLink.id} is pending, verifying with API..."
+                                                                        "Ã°Å¸â€™Â³ Link ${latestLink.id} is pending, verifying with API..."
                                                                 )
                                                                 val apiStatus =
                                                                         razorpayManager
@@ -569,7 +569,7 @@ class AIAgentContextBuilder(
                                                                         status = apiStatus
                                                                         android.util.Log.d(
                                                                                 "AIContextBuilder",
-                                                                                "ðŸ’³ Status updated to: $status"
+                                                                                "Ã°Å¸â€™Â³ Status updated to: $status"
                                                                         )
                                                                 }
                                                         }
@@ -579,10 +579,10 @@ class AIAgentContextBuilder(
                                                         )
                                                         if (status == "paid") {
                                                                 stringBuilder.append(
-                                                                        "âœ… PAYMENT RECEIVED for Link ID: ${latestLink.id}\n"
+                                                                        "Ã¢Å“â€¦ PAYMENT RECEIVED for Link ID: ${latestLink.id}\n"
                                                                 )
                                                                 stringBuilder.append(
-                                                                        "User PAID â‚¹$amount for '$description'.\n"
+                                                                        "User PAID Ã¢â€šÂ¹$amount for '$description'.\n"
                                                                 )
                                                                 stringBuilder.append(
                                                                         "Action: Confirm receipt and proceed. Do NOT ask to pay again.\n"
@@ -591,10 +591,10 @@ class AIAgentContextBuilder(
                                                                         status == "issued"
                                                         ) {
                                                                 stringBuilder.append(
-                                                                        "â ³ PAYMENT PENDING for Link ID: ${latestLink.id}\n"
+                                                                        "Ã¢ Â³ PAYMENT PENDING for Link ID: ${latestLink.id}\n"
                                                                 )
                                                                 stringBuilder.append(
-                                                                        "- Amount: â‚¹$amount for $description\n"
+                                                                        "- Amount: Ã¢â€šÂ¹$amount for $description\n"
                                                                 )
                                                                 stringBuilder.append(
                                                                         "- Status: PENDING (Not paid yet)\n"
@@ -604,7 +604,7 @@ class AIAgentContextBuilder(
                                                                 )
                                                         } else {
                                                                 stringBuilder.append(
-                                                                        "â Œ Previous Link Status: $status (â‚¹$amount)\n"
+                                                                        "Ã¢ Å’ Previous Link Status: $status (Ã¢â€šÂ¹$amount)\n"
                                                                 )
                                                         }
                                                         stringBuilder.append("\n")
@@ -640,7 +640,7 @@ class AIAgentContextBuilder(
                                                         stringBuilder.append("\n")
                                                         android.util.Log.d(
                                                                 "AIContextBuilder",
-                                                                "ðŸ’³ Razorpay dynamic link instructions added (Configured)"
+                                                                "Ã°Å¸â€™Â³ Razorpay dynamic link instructions added (Configured)"
                                                         )
                                                 } else {
                                                         stringBuilder.append(
@@ -655,13 +655,13 @@ class AIAgentContextBuilder(
                                                         stringBuilder.append("\n")
                                                         android.util.Log.d(
                                                                 "AIContextBuilder",
-                                                                "ðŸ’³ Razorpay not configured message added"
+                                                                "Ã°Å¸â€™Â³ Razorpay not configured message added"
                                                         )
                                                 }
                                         } catch (e: Exception) {
                                                 android.util.Log.e(
                                                         "AIContextBuilder",
-                                                        "â Œ Error adding razorpay context: ${e.message}",
+                                                        "Ã¢ Å’ Error adding razorpay context: ${e.message}",
                                                         e
                                                 )
                                         }
@@ -680,7 +680,7 @@ class AIAgentContextBuilder(
                                 ) {
                                         android.util.Log.d(
                                                 "AIContextBuilder",
-                                                "💳 Adding standalone Razorpay link context fallback"
+                                                "ðŸ’³ Adding standalone Razorpay link context fallback"
                                         )
                                         try {
                                                 val razorpayManager =
@@ -729,7 +729,7 @@ class AIAgentContextBuilder(
                                         } catch (e: Exception) {
                                                 android.util.Log.e(
                                                         "AIContextBuilder",
-                                                        "❌ Error adding standalone razorpay context: ${e.message}",
+                                                        "âŒ Error adding standalone razorpay context: ${e.message}",
                                                         e
                                                 )
                                         }
@@ -737,19 +737,19 @@ class AIAgentContextBuilder(
                         } else {
                                 android.util.Log.d(
                                         "AIContextBuilder",
-                                        "ðŸ’³ Payment context disabled for custom template"
+                                        "Ã°Å¸â€™Â³ Payment context disabled for custom template"
                                 )
                         }
 
                                 // 4. Table Sheet Data Context (Business Data) - HIGHEST PRIORITY
                                 android.util.Log.d(
                                         "AIContextBuilder",
-                                        "ðŸ“Š Checking data sheet lookup: ${settingsManager.enableDataSheetLookup}"
+                                        "Ã°Å¸â€œÅ  Checking data sheet lookup: ${settingsManager.enableDataSheetLookup}"
                                 )
                                 if (settingsManager.enableDataSheetLookup) {
                                         android.util.Log.d(
                                                 "AIContextBuilder",
-                                                "ðŸ“Š Searching table sheets"
+                                                "Ã°Å¸â€œÅ  Searching table sheets"
                                         )
                                         val sheetData =
                                                 repository.searchTableSheets(
@@ -758,7 +758,7 @@ class AIAgentContextBuilder(
                                                 )
                                         android.util.Log.d(
                                                 "AIContextBuilder",
-                                                "ðŸ“Š Found ${sheetData.size} sheet matches"
+                                                "Ã°Å¸â€œÅ  Found ${sheetData.size} sheet matches"
                                         )
                                         if (sheetData.isNotEmpty()) {
                                                 stringBuilder.append(
@@ -792,7 +792,7 @@ class AIAgentContextBuilder(
                                                 stringBuilder.append("\n")
                                                 android.util.Log.d(
                                                         "AIContextBuilder",
-                                                        "ðŸ“Š Sheet data context added"
+                                                        "Ã°Å¸â€œÅ  Sheet data context added"
                                                 )
                                         }
                                 }
@@ -802,7 +802,7 @@ class AIAgentContextBuilder(
                                 if (shouldIncludeDocumentContext()) {
                                         android.util.Log.d(
                                                 "AIContextBuilder",
-                                                "ðŸ“„ Fetching agent document library"
+                                                "Ã°Å¸â€œâ€ž Fetching agent document library"
                                         )
                                         try {
                                         // Add timeout to prevent hanging on database operations
@@ -821,7 +821,7 @@ class AIAgentContextBuilder(
                                         if (documentsList != null) {
                                                 android.util.Log.d(
                                                         "AIContextBuilder",
-                                                        "ðŸ“„ Agent documents loaded"
+                                                        "Ã°Å¸â€œâ€ž Agent documents loaded"
                                                 )
 
                                                 if (documentsList.contains("Available Documents")) {
@@ -875,31 +875,31 @@ class AIAgentContextBuilder(
                                                         stringBuilder.append("\n")
                                                         android.util.Log.d(
                                                                 "AIContextBuilder",
-                                                                "ðŸ“„ Agent document context added"
+                                                                "Ã°Å¸â€œâ€ž Agent document context added"
                                                         )
                                                 } else {
                                                         android.util.Log.d(
                                                                 "AIContextBuilder",
-                                                                "ðŸ“„ No agent documents available"
+                                                                "Ã°Å¸â€œâ€ž No agent documents available"
                                                         )
                                                 }
                                         } else {
                                                 android.util.Log.w(
                                                         "AIContextBuilder",
-                                                        "âš ï¸ Document library fetch timed out (3s), skipping"
+                                                        "Ã¢Å¡Â Ã¯Â¸Â Document library fetch timed out (3s), skipping"
                                                 )
                                         }
                                         } catch (e: Exception) {
                                                 android.util.Log.e(
                                                         "AIContextBuilder",
-                                                        "âŒ Error loading agent documents: ${e.message}",
+                                                        "Ã¢ÂÅ’ Error loading agent documents: ${e.message}",
                                                         e
                                                 )
                                         }
                                 } else {
                                         android.util.Log.d(
                                                 "AIContextBuilder",
-                                                "ðŸ“„ Document tool disabled for custom template"
+                                                "Ã°Å¸â€œâ€ž Document tool disabled for custom template"
                                         )
                                 }
 
@@ -907,7 +907,7 @@ class AIAgentContextBuilder(
                                 if (shouldIncludeAgentFormContext()) {
                                         android.util.Log.d(
                                                 "AIContextBuilder",
-                                                "ðŸ§¾ Fetching agent form context"
+                                                "Ã°Å¸Â§Â¾ Fetching agent form context"
                                         )
                                         try {
                                         val agentFormContext =
@@ -923,20 +923,20 @@ class AIAgentContextBuilder(
                                                 stringBuilder.append("\n")
                                                 android.util.Log.d(
                                                         "AIContextBuilder",
-                                                        "ðŸ§¾ Agent form context added"
+                                                        "Ã°Å¸Â§Â¾ Agent form context added"
                                                 )
                                         }
                                         } catch (e: Exception) {
                                                 android.util.Log.e(
                                                         "AIContextBuilder",
-                                                        "âŒ Error loading agent form context: ${e.message}",
+                                                        "Ã¢ÂÅ’ Error loading agent form context: ${e.message}",
                                                         e
                                                 )
                                         }
                                 } else {
                                         android.util.Log.d(
                                                 "AIContextBuilder",
-                                                "ðŸ§¾ Agent form tool disabled for custom template"
+                                                "Ã°Å¸Â§Â¾ Agent form tool disabled for custom template"
                                         )
                                 }
 
@@ -944,7 +944,7 @@ class AIAgentContextBuilder(
                                 if (shouldIncludeSpeechContext()) {
                                         android.util.Log.d(
                                                 "AIContextBuilder",
-                                                "ðŸŽ¤ Fetching agent speech context"
+                                                "Ã°Å¸Å½Â¤ Fetching agent speech context"
                                         )
                                         try {
                                         val speechIntegration =
@@ -958,31 +958,31 @@ class AIAgentContextBuilder(
                                                 stringBuilder.append(speechContext)
                                                 android.util.Log.d(
                                                         "AIContextBuilder",
-                                                        "ðŸŽ¤ Agent speech context added"
+                                                        "Ã°Å¸Å½Â¤ Agent speech context added"
                                                 )
                                         } else {
                                                 android.util.Log.d(
                                                         "AIContextBuilder",
-                                                        "ðŸŽ¤ Speech not enabled or no context"
+                                                        "Ã°Å¸Å½Â¤ Speech not enabled or no context"
                                                 )
                                         }
                                         } catch (e: Exception) {
                                                 android.util.Log.e(
                                                         "AIContextBuilder",
-                                                        "âŒ Error loading speech context: ${e.message}",
+                                                        "Ã¢ÂÅ’ Error loading speech context: ${e.message}",
                                                         e
                                                 )
                                         }
                                 } else {
                                         android.util.Log.d(
                                                 "AIContextBuilder",
-                                                "ðŸŽ¤ Agent speech tool disabled for custom template"
+                                                "Ã°Å¸Å½Â¤ Agent speech tool disabled for custom template"
                                         )
                                 }
 
                                 // 4.8 Google Calendar Context
                                 if (shouldIncludeGoogleCalendarContext()) {
-                                        android.util.Log.d("AIContextBuilder", "📅 Fetching Google Calendar context")
+                                        android.util.Log.d("AIContextBuilder", "ðŸ“… Fetching Google Calendar context")
                                         stringBuilder.append("\n[GOOGLE CALENDAR CAPABILITY]\n")
                                         stringBuilder.append("You can manage Google Calendar events, Google Meet links, Google Tasks, task lists, and user-level calendar reminder settings.\n")
                                         stringBuilder.append("SUPPORTED EVENT FIELDS: title/summary, description, location, startTime, endTime, startDate, endDate, timeZone, allDay, attendees, recurrence, reminders, visibility, status, transparency, colorId, guestsCanInviteOthers, guestsCanModify, guestsCanSeeOtherGuests, createMeetLink, conferenceType, conferenceRequestId, calendarId, sendUpdates.\n")
@@ -1022,7 +1022,7 @@ class AIAgentContextBuilder(
 
                                 // 4.9 Google Gmail Context
                                 if (shouldIncludeGoogleGmailContext()) {
-                                        android.util.Log.d("AIContextBuilder", "📧 Fetching Google Gmail context")
+                                        android.util.Log.d("AIContextBuilder", "ðŸ“§ Fetching Google Gmail context")
                                         stringBuilder.append("\n[GOOGLE GMAIL CAPABILITY]\n")
                                         stringBuilder.append("You can fully manage the user's Gmail: emails, threads, drafts, labels, attachments, and tracked history.\n")
                                         stringBuilder.append("All outgoing AI emails automatically get a unique tracking pixel and a Gmail history record. You do NOT need to add tracking manually.\n")
@@ -1093,7 +1093,7 @@ class AIAgentContextBuilder(
                                 // 5. Conversation Memory & Context Switching
                                 android.util.Log.d(
                                         "AIContextBuilder",
-                                        "ðŸ’­ Checking memory: ${settingsManager.enableMemory}"
+                                        "Ã°Å¸â€™Â­ Checking memory: ${settingsManager.enableMemory}"
                                 )
                                 var hasAskedForName = false
                                 var userIgnoredNameRequest = false
@@ -1102,22 +1102,45 @@ class AIAgentContextBuilder(
                                 if (settingsManager.enableMemory) {
                                         android.util.Log.d(
                                                 "AIContextBuilder",
-                                                "ðŸ’­ Fetching conversation history"
+                                                "Ã°Å¸â€™Â­ Fetching conversation history"
                                         )
+                                        val historyLimit =
+                                                if (settingsManager.activeTemplate.equals("CUSTOM", ignoreCase = true)) {
+                                                        settingsManager.customTemplateConversationHistoryLimit
+                                                } else {
+                                                        10
+                                                }
                                         val history =
                                                 repository.getConversationHistory(
                                                         senderPhone,
-                                                        limit = 10
+                                                        limit = historyLimit
                                                 )
                                         android.util.Log.d(
                                                 "AIContextBuilder",
-                                                "ðŸ’­ Found ${history.size} messages in history"
+                                                "Ã°Å¸â€™Â­ Found ${history.size} messages in history"
                                         )
                                         if (history.isNotEmpty()) {
                                                 stringBuilder.append("[CONVERSATION HISTORY]\n")
                                                 // History comes newest first usually, so reverse it
                                                 val reversedHistory = history.reversed()
+                                                val perMessageLimit =
+                                                        if (settingsManager.activeTemplate.equals("CUSTOM", ignoreCase = true)) {
+                                                                320
+                                                        } else {
+                                                                220
+                                                        }
+                                                val historyCharBudget =
+                                                        if (settingsManager.activeTemplate.equals("CUSTOM", ignoreCase = true)) {
+                                                                5000
+                                                        } else {
+                                                                2200
+                                                        }
+                                                var consumedHistoryChars = 0
+                                                var historyTruncated = false
+
                                                 reversedHistory.forEachIndexed { index, msg ->
+                                                        if (historyTruncated) return@forEachIndexed
+
                                                         val sender =
                                                                 if (msg.status == "RECEIVED" ||
                                                                                 msg.outgoingMessage
@@ -1125,12 +1148,28 @@ class AIAgentContextBuilder(
                                                                 )
                                                                         "User"
                                                                 else "Assistant"
-                                                        val text =
+                                                        val rawText =
                                                                 if (msg.outgoingMessage.isNotEmpty()
                                                                 )
                                                                         msg.outgoingMessage
                                                                 else msg.incomingMessage
-                                                        stringBuilder.append("$sender: $text\n")
+                                                        val normalizedText =
+                                                                rawText.replace(Regex("\\s+"), " ").trim()
+                                                        val text =
+                                                                if (normalizedText.length > perMessageLimit) {
+                                                                        normalizedText.take(perMessageLimit) + "..."
+                                                                } else {
+                                                                        normalizedText
+                                                                }
+                                                        val line = "$sender: $text\n"
+                                                        if (consumedHistoryChars + line.length > historyCharBudget) {
+                                                                stringBuilder.append("[...history truncated for prompt budget...]\n")
+                                                                historyTruncated = true
+                                                                return@forEachIndexed
+                                                        }
+
+                                                        stringBuilder.append(line)
+                                                        consumedHistoryChars += line.length
 
                                                         // Detect topic from user messages
                                                         if (sender == "User") {
@@ -1242,19 +1281,19 @@ class AIAgentContextBuilder(
                                                 stringBuilder.append("\n")
                                                 android.util.Log.d(
                                                         "AIContextBuilder",
-                                                        "ðŸ’­ Memory context added"
+                                                        "Ã°Å¸â€™Â­ Memory context added"
                                                 )
                                         }
                                 }
 
                                 // Detect current topic
-                                android.util.Log.d("AIContextBuilder", "ðŸŽ¯ Detecting topic")
+                                android.util.Log.d("AIContextBuilder", "Ã°Å¸Å½Â¯ Detecting topic")
                                 val currentTopicResult =
                                         contextSwitchingManager.detectTopic(incomingMessage)
                                 val currentTopic = currentTopicResult.topic
                                 android.util.Log.d(
                                         "AIContextBuilder",
-                                        "ðŸŽ¯ Current topic: $currentTopic"
+                                        "Ã°Å¸Å½Â¯ Current topic: $currentTopic"
                                 )
 
                                 // Check for topic change
@@ -1299,7 +1338,7 @@ class AIAgentContextBuilder(
                                 // 6. Smart Profile Extraction (Name Only - No Auto Phone Request)
                                 android.util.Log.d(
                                         "AIContextBuilder",
-                                        "ðŸ‘¤ Smart profile extraction"
+                                        "Ã°Å¸â€˜Â¤ Smart profile extraction"
                                 )
                                 val profileExtractor =
                                         com.message.bulksend.autorespond.ai.profile
@@ -1308,7 +1347,7 @@ class AIAgentContextBuilder(
                                 // Check if we're awaiting name confirmation
                                 android.util.Log.d(
                                         "AIContextBuilder",
-                                        "ðŸ‘¤ Checking name confirmation status"
+                                        "Ã°Å¸â€˜Â¤ Checking name confirmation status"
                                 )
                                 if (profileExtractor.isAwaitingNameConfirmation(senderPhone)) {
                                         val pendingName =
@@ -1459,7 +1498,7 @@ class AIAgentContextBuilder(
                                 // 6.5 E-commerce: Check for pending orders and ask for address
                                 android.util.Log.d(
                                         "AIContextBuilder",
-                                        "ðŸ›’ Checking e-commerce mode"
+                                        "Ã°Å¸â€ºâ€™ Checking e-commerce mode"
                                 )
                                 val advancedSettings =
                                         com.message.bulksend.autorespond.ai.settings
@@ -1469,7 +1508,7 @@ class AIAgentContextBuilder(
                                 ) {
                                         android.util.Log.d(
                                                 "AIContextBuilder",
-                                                "ðŸ›’ Checking pending orders"
+                                                "Ã°Å¸â€ºâ€™ Checking pending orders"
                                         )
                                         try {
                                                 val orderManager =
@@ -1478,7 +1517,7 @@ class AIAgentContextBuilder(
                                                 if (orderManager.hasPendingOrder(senderPhone)) {
                                                         android.util.Log.d(
                                                                 "AIContextBuilder",
-                                                                "ðŸ›’ Pending order found"
+                                                                "Ã°Å¸â€ºâ€™ Pending order found"
                                                         )
                                                         val orderDetails =
                                                                 orderManager.getPendingOrderDetails(
@@ -1498,7 +1537,7 @@ class AIAgentContextBuilder(
                                                                         "Quantity: ${orderDetails["Quantity"]}\n"
                                                                 )
                                                                 stringBuilder.append(
-                                                                        "Total Amount: â‚¹${orderDetails["Total Amount"]}\n"
+                                                                        "Total Amount: Ã¢â€šÂ¹${orderDetails["Total Amount"]}\n"
                                                                 )
                                                                 stringBuilder.append("\n")
                                                                 stringBuilder.append(
@@ -1524,7 +1563,7 @@ class AIAgentContextBuilder(
                                                                 stringBuilder.append("\n")
                                                                 android.util.Log.d(
                                                                         "AIContextBuilder",
-                                                                        "ðŸ›’ Pending order context added"
+                                                                        "Ã°Å¸â€ºâ€™ Pending order context added"
                                                                 )
                                                         }
                                                 }
@@ -1539,7 +1578,7 @@ class AIAgentContextBuilder(
                                 // 7. REQUIRE NAME (Only if setting enabled and no sheet data found)
                                 android.util.Log.d(
                                         "AIContextBuilder",
-                                        "ðŸ” Checking name requirement"
+                                        "Ã°Å¸â€Â Checking name requirement"
                                 )
                                 if (isNameUnknown &&
                                                 settingsManager.requireNameToContinue &&
@@ -1581,7 +1620,7 @@ class AIAgentContextBuilder(
                                 // 8. Current User Query
                                 android.util.Log.d(
                                         "AIContextBuilder",
-                                        "✅ Context built successfully, length: ${stringBuilder.length}"
+                                        "âœ… Context built successfully, length: ${stringBuilder.length}"
                                 )
                                 stringBuilder.append("User: $incomingMessage\n")
                                 stringBuilder.append("Assistant: ")
@@ -1590,7 +1629,7 @@ class AIAgentContextBuilder(
                         } catch (e: Exception) {
                                 android.util.Log.e(
                                         "AIContextBuilder",
-                                        "❌ Context building failed: ${e.message}",
+                                        "âŒ Context building failed: ${e.message}",
                                         e
                                 )
                                 // Return minimal context on error
@@ -3152,6 +3191,8 @@ class AIAgentContextBuilder(
                 return fields.toList()
         }
 }
+
+
 
 
 

@@ -1,4 +1,4 @@
-package com.message.bulksend.autorespond.ai.ui.customai
+﻿package com.message.bulksend.autorespond.ai.ui.customai
 
 import android.content.Intent
 import android.util.Log
@@ -157,6 +157,24 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
     }
     var autonomousSilenceGapMinutesText by rememberSaveable {
         mutableStateOf(settingsManager.customTemplateAutonomousSilenceGapMinutes.toString())
+    }
+    var autonomousMaxNudgesPerDayText by rememberSaveable {
+        mutableStateOf(settingsManager.customTemplateAutonomousMaxNudgesPerDay.toString())
+    }
+    var autonomousMaxRoundsText by rememberSaveable {
+        mutableStateOf(settingsManager.customTemplateAutonomousMaxRounds.toString())
+    }
+    var autonomousMaxQueueText by rememberSaveable {
+        mutableStateOf(settingsManager.customTemplateAutonomousMaxQueue.toString())
+    }
+    var autonomousMaxQueuePerUserText by rememberSaveable {
+        mutableStateOf(settingsManager.customTemplateAutonomousMaxQueuePerUser.toString())
+    }
+    var autonomousMaxGoalsPerRunText by rememberSaveable {
+        mutableStateOf(settingsManager.customTemplateAutonomousMaxGoalsPerRun.toString())
+    }
+    var conversationHistoryLimitText by rememberSaveable {
+        mutableStateOf(settingsManager.customTemplateConversationHistoryLimit.toString())
     }
     var autonomousQueueSize by rememberSaveable { mutableStateOf(0) }
     var autonomousLastHeartbeatAt by rememberSaveable { mutableStateOf(0L) }
@@ -496,6 +514,13 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
                     customEnabled = settingsManager.activeTemplate.equals("CUSTOM", ignoreCase = true)
                     promptMode = settingsManager.customTemplatePromptMode
                     taskModeEnabled = settingsManager.customTemplateTaskModeEnabled
+                    autonomousSilenceGapMinutesText = settingsManager.customTemplateAutonomousSilenceGapMinutes.toString()
+                    autonomousMaxNudgesPerDayText = settingsManager.customTemplateAutonomousMaxNudgesPerDay.toString()
+                    autonomousMaxRoundsText = settingsManager.customTemplateAutonomousMaxRounds.toString()
+                    autonomousMaxQueueText = settingsManager.customTemplateAutonomousMaxQueue.toString()
+                    autonomousMaxQueuePerUserText = settingsManager.customTemplateAutonomousMaxQueuePerUser.toString()
+                    autonomousMaxGoalsPerRunText = settingsManager.customTemplateAutonomousMaxGoalsPerRun.toString()
+                    conversationHistoryLimitText = settingsManager.customTemplateConversationHistoryLimit.toString()
                     scope.launch {
                         syncReferenceSheetOptions()
                         refreshGoogleConnectionSummary()
@@ -866,6 +891,60 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
                                     settingsManager.customTemplateAutonomousSilenceGapMinutes = parsed
                                 }
                             },
+                            autonomousMaxNudgesPerDayText = autonomousMaxNudgesPerDayText,
+                            onAutonomousMaxNudgesPerDayTextChange = { raw ->
+                                val filtered = raw.filter { ch -> ch.isDigit() }.take(3)
+                                autonomousMaxNudgesPerDayText = filtered
+                                val parsed = filtered.toIntOrNull()
+                                if (parsed != null) {
+                                    settingsManager.customTemplateAutonomousMaxNudgesPerDay = parsed
+                                }
+                            },
+                            autonomousMaxRoundsText = autonomousMaxRoundsText,
+                            onAutonomousMaxRoundsTextChange = { raw ->
+                                val filtered = raw.filter { ch -> ch.isDigit() }.take(3)
+                                autonomousMaxRoundsText = filtered
+                                val parsed = filtered.toIntOrNull()
+                                if (parsed != null) {
+                                    settingsManager.customTemplateAutonomousMaxRounds = parsed
+                                }
+                            },
+                            autonomousMaxQueueText = autonomousMaxQueueText,
+                            onAutonomousMaxQueueTextChange = { raw ->
+                                val filtered = raw.filter { ch -> ch.isDigit() }.take(4)
+                                autonomousMaxQueueText = filtered
+                                val parsed = filtered.toIntOrNull()
+                                if (parsed != null) {
+                                    settingsManager.customTemplateAutonomousMaxQueue = parsed
+                                }
+                            },
+                            autonomousMaxQueuePerUserText = autonomousMaxQueuePerUserText,
+                            onAutonomousMaxQueuePerUserTextChange = { raw ->
+                                val filtered = raw.filter { ch -> ch.isDigit() }.take(3)
+                                autonomousMaxQueuePerUserText = filtered
+                                val parsed = filtered.toIntOrNull()
+                                if (parsed != null) {
+                                    settingsManager.customTemplateAutonomousMaxQueuePerUser = parsed
+                                }
+                            },
+                            autonomousMaxGoalsPerRunText = autonomousMaxGoalsPerRunText,
+                            onAutonomousMaxGoalsPerRunTextChange = { raw ->
+                                val filtered = raw.filter { ch -> ch.isDigit() }.take(3)
+                                autonomousMaxGoalsPerRunText = filtered
+                                val parsed = filtered.toIntOrNull()
+                                if (parsed != null) {
+                                    settingsManager.customTemplateAutonomousMaxGoalsPerRun = parsed
+                                }
+                            },
+                            conversationHistoryLimitText = conversationHistoryLimitText,
+                            onConversationHistoryLimitTextChange = { raw ->
+                                val filtered = raw.filter { ch -> ch.isDigit() }.take(3)
+                                conversationHistoryLimitText = filtered
+                                val parsed = filtered.toIntOrNull()
+                                if (parsed != null) {
+                                    settingsManager.customTemplateConversationHistoryLimit = parsed
+                                }
+                            },
                             runtimeQueueSize = autonomousQueueSize,
                             runtimeLastHeartbeatAt = autonomousLastHeartbeatAt,
                             runtimeLastError = autonomousLastError,
@@ -969,6 +1048,11 @@ private fun buildWriteFieldSchemaJson(fields: List<CustomWriteFieldSpec>): Strin
     }
     return arr.toString()
 }
+
+
+
+
+
 
 
 

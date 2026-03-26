@@ -336,16 +336,28 @@ class AIAgentSettingsManager(context: Context) {
             .putInt("custom_template_autonomous_max_queue", value.coerceAtLeast(1))
             .apply()
 
+    var customTemplateAutonomousMaxQueuePerUser: Int
+        get() = prefs.getInt("custom_template_autonomous_max_queue_per_user", 5)
+        set(value) = prefs.edit()
+            .putInt("custom_template_autonomous_max_queue_per_user", value.coerceAtLeast(1))
+            .apply()
+
     var customTemplateAutonomousMaxGoalsPerRun: Int
         get() = prefs.getInt("custom_template_autonomous_max_goals_per_run", 10)
         set(value) = prefs.edit()
             .putInt("custom_template_autonomous_max_goals_per_run", value.coerceAtLeast(1))
             .apply()
 
+    var customTemplateConversationHistoryLimit: Int
+        get() = prefs.getInt("custom_template_conversation_history_limit", 25)
+        set(value) = prefs.edit()
+            .putInt("custom_template_conversation_history_limit", value.coerceIn(5, 100))
+            .apply()
     var customTemplateNeedDiscoverySchemaJson: String
         get() = prefs.getString("custom_template_need_discovery_schema_json", "") ?: ""
         set(value) = prefs.edit()
             .putString("custom_template_need_discovery_schema_json", value)
             .apply()
 }
+
 

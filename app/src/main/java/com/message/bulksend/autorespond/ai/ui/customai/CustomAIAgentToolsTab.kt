@@ -1,4 +1,4 @@
-package com.message.bulksend.autorespond.ai.ui.customai
+﻿package com.message.bulksend.autorespond.ai.ui.customai
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -80,6 +80,18 @@ internal fun CustomAIAgentToolsTab(
     onContinuousAutonomousEnabledChange: (Boolean) -> Unit,
     autonomousSilenceGapMinutesText: String,
     onAutonomousSilenceGapMinutesTextChange: (String) -> Unit,
+    autonomousMaxNudgesPerDayText: String,
+    onAutonomousMaxNudgesPerDayTextChange: (String) -> Unit,
+    autonomousMaxRoundsText: String,
+    onAutonomousMaxRoundsTextChange: (String) -> Unit,
+    autonomousMaxQueueText: String,
+    onAutonomousMaxQueueTextChange: (String) -> Unit,
+    autonomousMaxQueuePerUserText: String,
+    onAutonomousMaxQueuePerUserTextChange: (String) -> Unit,
+    autonomousMaxGoalsPerRunText: String,
+    onAutonomousMaxGoalsPerRunTextChange: (String) -> Unit,
+    conversationHistoryLimitText: String,
+    onConversationHistoryLimitTextChange: (String) -> Unit,
     runtimeQueueSize: Int,
     runtimeLastHeartbeatAt: Long,
     runtimeLastError: String,
@@ -292,6 +304,122 @@ internal fun CustomAIAgentToolsTab(
         item {
             Card(
                 shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF101827)),
+                border = BorderStroke(1.dp, Color(0xFF334155)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Autonomous Runtime Limits", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Safety caps for loop size, retries, nudges and context window.",
+                        color = Color(0xFFCBD5E1),
+                        fontSize = 12.sp
+                    )
+                    OutlinedTextField(
+                        value = autonomousMaxNudgesPerDayText,
+                        onValueChange = onAutonomousMaxNudgesPerDayTextChange,
+                        label = { Text("Max Nudges / Day") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFF3B82F6),
+                            unfocusedBorderColor = Color(0xFF334155),
+                            focusedLabelColor = Color(0xFF93C5FD),
+                            unfocusedLabelColor = Color(0xFF94A3B8)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = autonomousMaxRoundsText,
+                        onValueChange = onAutonomousMaxRoundsTextChange,
+                        label = { Text("Max Rounds / Goal") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFF3B82F6),
+                            unfocusedBorderColor = Color(0xFF334155),
+                            focusedLabelColor = Color(0xFF93C5FD),
+                            unfocusedLabelColor = Color(0xFF94A3B8)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = autonomousMaxQueueText,
+                        onValueChange = onAutonomousMaxQueueTextChange,
+                        label = { Text("Max Queue (Global)") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFF3B82F6),
+                            unfocusedBorderColor = Color(0xFF334155),
+                            focusedLabelColor = Color(0xFF93C5FD),
+                            unfocusedLabelColor = Color(0xFF94A3B8)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = autonomousMaxQueuePerUserText,
+                        onValueChange = onAutonomousMaxQueuePerUserTextChange,
+                        label = { Text("Max Queue / User") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFF3B82F6),
+                            unfocusedBorderColor = Color(0xFF334155),
+                            focusedLabelColor = Color(0xFF93C5FD),
+                            unfocusedLabelColor = Color(0xFF94A3B8)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = autonomousMaxGoalsPerRunText,
+                        onValueChange = onAutonomousMaxGoalsPerRunTextChange,
+                        label = { Text("Max Goals / Heartbeat Run") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFF3B82F6),
+                            unfocusedBorderColor = Color(0xFF334155),
+                            focusedLabelColor = Color(0xFF93C5FD),
+                            unfocusedLabelColor = Color(0xFF94A3B8)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = conversationHistoryLimitText,
+                        onValueChange = onConversationHistoryLimitTextChange,
+                        label = { Text("Conversation History Window") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFF3B82F6),
+                            unfocusedBorderColor = Color(0xFF334155),
+                            focusedLabelColor = Color(0xFF93C5FD),
+                            unfocusedLabelColor = Color(0xFF94A3B8)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
                 border = BorderStroke(1.dp, Color(0xFF1E3A8A)),
                 modifier = Modifier
@@ -340,3 +468,4 @@ private fun formatHeartbeatTime(value: Long): String {
         SimpleDateFormat("dd MMM, HH:mm", Locale.getDefault()).format(Date(value))
     }.getOrDefault(value.toString())
 }
+

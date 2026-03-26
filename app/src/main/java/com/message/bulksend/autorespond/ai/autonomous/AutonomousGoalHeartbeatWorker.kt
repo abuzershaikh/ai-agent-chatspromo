@@ -1,4 +1,4 @@
-package com.message.bulksend.autorespond.ai.autonomous
+﻿package com.message.bulksend.autorespond.ai.autonomous
 
 import android.content.Context
 import androidx.work.CoroutineWorker
@@ -20,6 +20,7 @@ class AutonomousGoalHeartbeatWorker(
     private val settings = AIAgentSettingsManager(appContext)
     private val queueStore = AutonomousGoalQueueStore(appContext)
     private val runtime = AutonomousGoalRuntime(appContext)
+    private val paymentStatusWatcher = PaymentStatusEventWatcher.getInstance(appContext)
 
     override suspend fun doWork(): Result {
         if (!runtime.isContinuousEnabled()) {
@@ -28,9 +29,22 @@ class AutonomousGoalHeartbeatWorker(
 
         return runLock.withLock {
             queueStore.recordHeartbeat()
+            runCatching { paymentStatusWatcher.pollOnceIfEligible() }
+                .onFailure {
+                    android.util.Log.e(
+                        "AutonomousHeartbeat",
+                        "Payment status poll failed: ${it.message}"
+                    )
+                }
 
             val maxGoalsPerRun = settings.customTemplateAutonomousMaxGoalsPerRun
-            val candidates = queueStore.getRunnableGoals(System.currentTimeMillis(), maxGoalsPerRun)
+            val staleRunningMs = java.util.concurrent.TimeUnit.MINUTES.toMillis(5)
+            val candidates =
+                queueStore.getRunnableGoals(
+                    now = System.currentTimeMillis(),
+                    maxGoals = maxGoalsPerRun,
+                    staleRunningMs = staleRunningMs
+                )
             if (candidates.isEmpty()) return@withLock Result.success()
 
             val replyManager = AIReplyManager(applicationContext)
@@ -49,8 +63,9 @@ class AutonomousGoalHeartbeatWorker(
                 }
 
                 queueStore.markRunning(item.id)
+                val currentRound = item.attempts + 1
 
-                val prompt = buildHeartbeatPrompt(item)
+                val prompt = buildHeartbeatPrompt(item, currentRound)
                 val aiReply =
                     runCatching {
                         aiService.generateReply(
@@ -88,6 +103,7 @@ class AutonomousGoalHeartbeatWorker(
                         nextRunAt = decision.retryAt,
                         error = decision.reason
                     )
+                    scheduleRetryKickAt(decision.retryAt)
                     return@forEach
                 }
 
@@ -111,7 +127,35 @@ class AutonomousGoalHeartbeatWorker(
                     stateHash = stateHash,
                     outgoingText = outgoingText
                 )
-                queueStore.markCompleted(item.id)
+
+                val completion =
+                    runtime.evaluateGoalCompletion(
+                        senderPhone = item.senderPhone,
+                        goal = item.goal,
+                        latestUserMessage = item.lastUserMessage,
+                        latestAgentReply = outgoingText
+                    )
+
+                if (completion.isCompleted) {
+                    queueStore.markCompleted(item.id)
+                    return@forEach
+                }
+
+                if (currentRound >= maxAttempts) {
+                    queueStore.markFailed(
+                        item.id,
+                        "Max autonomous rounds reached before goal completion"
+                    )
+                    return@forEach
+                }
+
+                val nextRunAt = runtime.nextRunAtAfterOutbound(item.senderPhone)
+                queueStore.markWaitingAfterOutbound(
+                    id = item.id,
+                    nextRunAt = nextRunAt,
+                    outboundText = outgoingText
+                )
+                scheduleRetryKickAt(nextRunAt)
             }
 
             Result.success()
@@ -122,23 +166,29 @@ class AutonomousGoalHeartbeatWorker(
         if (item.attempts + 1 >= maxAttempts) {
             queueStore.markFailed(item.id, error)
         } else {
+            val retryAt = nextRunAt(item.attempts)
             queueStore.markWaiting(
                 id = item.id,
-                nextRunAt = nextRunAt(item.attempts),
+                nextRunAt = retryAt,
                 error = error
             )
+            scheduleRetryKickAt(retryAt)
         }
     }
 
-    private fun buildHeartbeatPrompt(item: AutonomousGoalQueueItem): String {
+    private fun buildHeartbeatPrompt(item: AutonomousGoalQueueItem, currentRound: Int): String {
+        val previousOutbound = item.lastAgentMessage.trim()
         return """
             [AUTONOMOUS_HEARTBEAT]
             Primary Goal: ${item.goal}
+            Goal Round: $currentRound
             Last user message: ${item.lastUserMessage}
+            Previous autonomous outbound: ${if (previousOutbound.isBlank()) "N/A" else previousOutbound}
 
             Continue this chat in human style.
             Ask one relevant question if details are missing.
-            If user already gave required details, confirm next action naturally.
+            If details are already known, guide to concrete next action.
+            Do not repeat the exact previous outbound line.
             Keep reply concise, warm, and action-oriented.
         """.trimIndent()
     }
@@ -154,7 +204,18 @@ class AutonomousGoalHeartbeatWorker(
         return System.currentTimeMillis() + minutes * 60_000L
     }
 
+    private fun scheduleRetryKickAt(runAtMillis: Long) {
+        val delayMillis = (runAtMillis - System.currentTimeMillis()).coerceAtLeast(5_000L)
+        val delaySeconds = (delayMillis / 1000L).coerceAtLeast(5L)
+        runtime.scheduleImmediateKick(delaySeconds = delaySeconds)
+    }
+
     companion object {
         private val runLock = Mutex()
     }
 }
+
+
+
+
+

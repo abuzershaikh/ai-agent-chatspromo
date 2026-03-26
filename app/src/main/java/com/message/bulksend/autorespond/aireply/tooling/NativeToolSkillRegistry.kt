@@ -12,7 +12,8 @@ data class SkillDefinition(
     val description: String,
     val parameters: JSONObject,
     val isEnabled: (AIAgentSettingsManager) -> Boolean,
-    val commandBuilder: (JSONObject) -> String?
+    val executionPolicy: SkillExecutionPolicy = SkillExecutionPolicy(),
+    val commandBuilder: (JSONObject) -> String? = { null }
 )
 
 class NativeToolSkillRegistry(
@@ -32,6 +33,7 @@ class NativeToolSkillRegistry(
                 )
                 .put("required", JSONArray().put("document_id")),
             isEnabled = { it.customTemplateEnableDocumentTool },
+            executionPolicy = SkillExecutionPolicy(timeoutMs = 20_000L, maxRetries = 1),
             commandBuilder = { args ->
                 val id = args.optString("document_id").ifBlank { args.optString("id") }.trim()
                 if (id.isBlank()) null else "[SEND_DOCUMENT: $id]"
@@ -49,6 +51,7 @@ class NativeToolSkillRegistry(
                 )
                 .put("required", JSONArray().put("query")),
             isEnabled = { it.customTemplateEnableDocumentTool },
+            executionPolicy = SkillExecutionPolicy(timeoutMs = 20_000L, maxRetries = 1),
             commandBuilder = { args ->
                 val query = args.optString("query").ifBlank { args.optString("tag") }.trim()
                 if (query.isBlank()) null else "[SEND_DOCUMENT_BY_TAG: $query]"
@@ -66,6 +69,7 @@ class NativeToolSkillRegistry(
                 )
                 .put("required", JSONArray().put("method_id")),
             isEnabled = { it.customTemplateEnablePaymentTool },
+            executionPolicy = SkillExecutionPolicy(timeoutMs = 18_000L, maxRetries = 1),
             commandBuilder = { args ->
                 val methodId = args.optString("method_id").ifBlank { args.optString("id") }.trim()
                 if (methodId.isBlank()) null else "[SEND_PAYMENT: $methodId]"
@@ -85,11 +89,86 @@ class NativeToolSkillRegistry(
                 )
                 .put("required", JSONArray().put("amount").put("description")),
             isEnabled = { it.customTemplateEnablePaymentTool },
+            executionPolicy = SkillExecutionPolicy(timeoutMs = 18_000L, maxRetries = 1),
             commandBuilder = { args ->
                 val amountRaw = if (args.has("amount")) sanitizeValue(args.opt("amount")) else ""
                 val description = args.optString("description").trim()
                 if (amountRaw.isBlank() || description.isBlank()) null
                 else "[GENERATE-PAYMENT-LINK: $amountRaw, $description]"
+            }
+        ),
+        SkillDefinition(
+            functionName = "payment_verification_status",
+            toolId = AgentTaskToolRegistry.PAYMENT_VERIFICATION_STATUS,
+            description = "Check latest payment verification/payment-link status for the current customer.",
+            parameters = JSONObject()
+                .put("type", "object")
+                .put(
+                    "properties",
+                    JSONObject()
+                        .put("customer_phone", JSONObject().put("type", "string"))
+                        .put("plink_id", JSONObject().put("type", "string"))
+                        .put("order_id", JSONObject().put("type", "string"))
+                ),
+            isEnabled = {
+                it.customTemplateEnablePaymentTool &&
+                    it.customTemplateEnablePaymentVerificationTool
+            },
+            executionPolicy = SkillExecutionPolicy(timeoutMs = 25_000L, maxRetries = 1)
+        ),
+        SkillDefinition(
+            functionName = "send_agent_form",
+            toolId = AgentTaskToolRegistry.SEND_AGENT_FORM,
+            description = "Generate and send an Agent Form link to customer using a template key.",
+            parameters = JSONObject()
+                .put("type", "object")
+                .put(
+                    "properties",
+                    JSONObject()
+                        .put("template_key", JSONObject().put("type", "string"))
+                )
+                .put("required", JSONArray().put("template_key")),
+            isEnabled = { it.customTemplateEnableAgentFormTool },
+            executionPolicy = SkillExecutionPolicy(timeoutMs = 25_000L, maxRetries = 1),
+            commandBuilder = { args ->
+                val templateKey = args.optString("template_key").ifBlank { args.optString("template") }.trim()
+                if (templateKey.isBlank()) null else "[SEND_AGENT_FORM: $templateKey]"
+            }
+        ),
+        SkillDefinition(
+            functionName = "check_agent_form_response",
+            toolId = AgentTaskToolRegistry.CHECK_AGENT_FORM_RESPONSE,
+            description = "Check latest Agent Form response for the current customer.",
+            parameters = JSONObject().put("type", "object").put("properties", JSONObject()),
+            isEnabled = { it.customTemplateEnableAgentFormTool },
+            executionPolicy = SkillExecutionPolicy(timeoutMs = 12_000L, maxRetries = 0),
+            commandBuilder = { "[CHECK_AGENT_FORM_RESPONSE]" }
+        ),
+        SkillDefinition(
+            functionName = "send_catalogue",
+            toolId = AgentTaskToolRegistry.CATALOGUE_SEND,
+            description = "Send product catalogue media by product id or product name query.",
+            parameters = JSONObject()
+                .put("type", "object")
+                .put(
+                    "properties",
+                    JSONObject()
+                        .put("product_id", JSONObject().put("type", "integer"))
+                        .put("product_name", JSONObject().put("type", "string"))
+                        .put("query", JSONObject().put("type", "string"))
+                ),
+            isEnabled = { it.customTemplateEnableAutonomousCatalogueSend },
+            executionPolicy = SkillExecutionPolicy(timeoutMs = 35_000L, maxRetries = 1),
+            commandBuilder = { args ->
+                val name =
+                    args.optString("product_name")
+                        .ifBlank { args.optString("query") }
+                        .trim()
+                if (name.isBlank()) {
+                    "sending catalogue"
+                } else {
+                    "sending $name catalogue"
+                }
             }
         ),
         SkillDefinition(
@@ -105,6 +184,7 @@ class NativeToolSkillRegistry(
                         .put("fields", JSONObject().put("type", "object"))
                 ),
             isEnabled = { it.customTemplateEnableSheetWriteTool },
+            executionPolicy = SkillExecutionPolicy(timeoutMs = 25_000L, maxRetries = 1),
             commandBuilder = { args ->
                 val pairs = mutableListOf<String>()
                 val sheet = args.optString("sheet").trim()
@@ -137,6 +217,7 @@ class NativeToolSkillRegistry(
                 )
                 .put("required", JSONArray().put("action")),
             isEnabled = { it.customTemplateEnableGoogleCalendarTool },
+            executionPolicy = SkillExecutionPolicy(timeoutMs = 30_000L, maxRetries = 1),
             commandBuilder = { args ->
                 val action = args.optString("action").ifBlank { args.optString("command") }.trim()
                 if (action.isBlank()) {
@@ -165,6 +246,7 @@ class NativeToolSkillRegistry(
                 )
                 .put("required", JSONArray().put("action")),
             isEnabled = { it.customTemplateEnableGoogleGmailTool },
+            executionPolicy = SkillExecutionPolicy(timeoutMs = 30_000L, maxRetries = 1),
             commandBuilder = { args ->
                 val action = args.optString("action").ifBlank { args.optString("command") }.trim()
                 if (action.isBlank()) {
@@ -191,6 +273,7 @@ class NativeToolSkillRegistry(
                 )
                 .put("required", JSONArray().put("step")),
             isEnabled = { it.customTemplateTaskModeEnabled },
+            executionPolicy = SkillExecutionPolicy(timeoutMs = 8_000L, maxRetries = 0),
             commandBuilder = { args ->
                 val step =
                     when {
@@ -213,7 +296,7 @@ class NativeToolSkillRegistry(
                         .put("latest_message", JSONObject().put("type", "string"))
                 ),
             isEnabled = { true },
-            commandBuilder = { null }
+            executionPolicy = SkillExecutionPolicy(timeoutMs = 8_000L, maxRetries = 0)
         )
     )
 
@@ -263,6 +346,17 @@ class NativeToolSkillRegistry(
             )
         }
         return declarations
+    }
+
+    fun findEnabledSkill(
+        functionName: String,
+        stepAllowlist: Set<String>? = null
+    ): SkillDefinition? {
+        val normalized = functionName.trim()
+        if (normalized.isBlank()) return null
+        return enabledSkills(stepAllowlist).firstOrNull {
+            it.functionName.equals(normalized, ignoreCase = true)
+        }
     }
 
     fun buildCommandForCall(

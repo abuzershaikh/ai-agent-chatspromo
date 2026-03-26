@@ -19,44 +19,76 @@ class PaymentStatusEventWatcher private constructor(
     private val runtime = AutonomousGoalRuntime(appContext)
     private val manager = RazorPaymentManager(appContext)
 
+    @Volatile
+    private var started: Boolean = false
+    private val startLock = Any()
+
     fun startIfEligible() {
         if (!runtime.isContinuousEnabled()) return
 
         val email = manager.getUserEmail()?.trim()?.lowercase(Locale.ROOT).orEmpty()
         if (email.isBlank()) return
 
-        synchronized(lock) {
+        synchronized(startLock) {
             if (started) return
             started = true
         }
 
         scope.launch {
             manager.getPaymentLinksFlow(email).collectLatest { links ->
-                val tracked = loadTrackedStatuses().toMutableMap()
-                links.forEach { link ->
-                    val normalizedStatus = normalizeStatus(link.status)
-                    val contact = link.customerContact.orEmpty().trim()
-                    if (contact.isBlank()) return@forEach
-                    if (normalizedStatus.isBlank()) return@forEach
-
-                    val existingStatus = tracked[link.id]
-                    if (existingStatus == normalizedStatus) return@forEach
-
-                    tracked[link.id] = normalizedStatus
-                    if (existingStatus.isNullOrBlank()) return@forEach
-
-                    runtime.enqueuePaymentStatusUpdate(
-                        senderPhone = contact,
-                        senderName = link.customerName.orEmpty(),
-                        status = normalizedStatus,
-                        amount = link.amount,
-                        description = link.description,
-                        linkId = link.id
-                    )
-                }
-                saveTrackedStatuses(tracked)
+                processLinks(links)
             }
         }
+    }
+
+    suspend fun pollOnceIfEligible() {
+        if (!runtime.isContinuousEnabled()) return
+
+        val email = manager.getUserEmail()?.trim()?.lowercase(Locale.ROOT).orEmpty()
+        if (email.isBlank()) return
+
+        val links = manager.getPaymentLinksSnapshot(email, limit = 300)
+        if (links.isEmpty()) return
+        processLinks(links)
+    }
+
+    private fun processLinks(links: List<RazorPaymentManager.PaymentLinkInfo>) {
+        val tracked = loadTrackedStatuses().toMutableMap()
+        links.forEach { link ->
+            val normalizedStatus = normalizeStatus(link.status)
+            val contact = link.customerContact.orEmpty().trim()
+            if (contact.isBlank()) return@forEach
+            if (normalizedStatus.isBlank()) return@forEach
+
+            val existingStatus = tracked[link.id]
+            if (existingStatus == normalizedStatus) return@forEach
+
+            tracked[link.id] = normalizedStatus
+
+            val shouldEmit =
+                when {
+                    existingStatus.isNullOrBlank() -> isTerminalStatus(normalizedStatus)
+                    else -> true
+                }
+            if (!shouldEmit) return@forEach
+
+            runtime.enqueuePaymentStatusUpdate(
+                senderPhone = contact,
+                senderName = link.customerName.orEmpty(),
+                status = normalizedStatus,
+                amount = link.amount,
+                description = link.description,
+                linkId = link.id
+            )
+        }
+        saveTrackedStatuses(tracked)
+    }
+
+    private fun isTerminalStatus(status: String): Boolean {
+        return status == "paid" ||
+            status == "failed" ||
+            status == "expired" ||
+            status == "cancelled"
     }
 
     private fun normalizeStatus(raw: String): String {
@@ -95,11 +127,14 @@ class PaymentStatusEventWatcher private constructor(
         private const val KEY_LAST_STATUSES = "last_statuses"
 
         @Volatile
-        private var started: Boolean = false
-        private val lock = Any()
+        private var INSTANCE: PaymentStatusEventWatcher? = null
 
         fun getInstance(context: Context): PaymentStatusEventWatcher {
-            return PaymentStatusEventWatcher(context.applicationContext)
+            return INSTANCE ?: synchronized(this) {
+                INSTANCE ?: PaymentStatusEventWatcher(context.applicationContext).also {
+                    INSTANCE = it
+                }
+            }
         }
     }
 }

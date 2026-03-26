@@ -1,4 +1,4 @@
-﻿package com.message.bulksend.autorespond.ai.autonomous
+package com.message.bulksend.autorespond.ai.autonomous
 
 data class AutonomousGoalQueueItem(
     val id: String,
@@ -12,7 +12,8 @@ data class AutonomousGoalQueueItem(
     val dedupeKey: String,
     val createdAt: Long,
     val updatedAt: Long,
-    val lastError: String = ""
+    val lastError: String = "",
+    val lastAgentMessage: String = ""
 ) {
     companion object {
         const val STATUS_QUEUED = "queued"
@@ -28,3 +29,4 @@ data class AutonomousRuntimeStatus(
     val lastHeartbeatAt: Long,
     val lastError: String
 )
+

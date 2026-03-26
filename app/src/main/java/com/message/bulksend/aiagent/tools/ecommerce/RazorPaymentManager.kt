@@ -216,6 +216,29 @@ class RazorPaymentManager(private val context: Context) {
     /**
      * Fetch the latest payment link for a specific customer phone number from Firestore
      */
+
+    suspend fun getPaymentLinksSnapshot(email: String, limit: Int = 200): List<PaymentLinkInfo> {
+        val normalizedEmail = email.trim().lowercase()
+        if (normalizedEmail.isBlank()) return emptyList()
+
+        return withContext(Dispatchers.IO) {
+            try {
+                val db = FirebaseFirestore.getInstance()
+                val collection = db.collection("users").document(normalizedEmail).collection("payment_links")
+                val snapshot =
+                    collection
+                        .orderBy("created_at", Query.Direction.DESCENDING)
+                        .limit(limit.coerceIn(1, 500).toLong())
+                        .get()
+                        .await()
+
+                snapshot.documents.map { doc -> toPaymentLinkInfo(doc) }
+            } catch (e: Exception) {
+                android.util.Log.e("RazorPaymentManager", "Error fetching payment link snapshot: ${e.message}")
+                emptyList()
+            }
+        }
+    }
     suspend fun getLatestPaymentLinkForUser(customerPhone: String): PaymentLinkInfo? {
         val email = getUserEmail() ?: return null
         val normalizedTargetPhone = normalizePhone(customerPhone)
@@ -407,3 +430,4 @@ class RazorPaymentManager(private val context: Context) {
         }
     }
 }
+

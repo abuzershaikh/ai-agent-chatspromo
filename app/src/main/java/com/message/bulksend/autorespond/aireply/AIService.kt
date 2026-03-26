@@ -1,4 +1,4 @@
-package com.message.bulksend.autorespond.aireply
+﻿package com.message.bulksend.autorespond.aireply
 
 import android.content.Context
 import kotlinx.coroutines.CoroutineScope
@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -21,6 +22,8 @@ import com.message.bulksend.autorespond.ai.autonomous.AutonomousGoalRuntime
 import com.message.bulksend.autorespond.ai.autonomous.PaymentStatusEventWatcher
 import com.message.bulksend.autorespond.ai.needdiscovery.NeedDiscoveryManager
 import com.message.bulksend.autorespond.aireply.tooling.NativeToolSkillRegistry
+import com.message.bulksend.autorespond.aireply.tooling.NativeSkillExecutor
+import com.message.bulksend.autorespond.aireply.tooling.SkillExecutionResult
 
 class AIService(private val context: Context) {
     private val configManager = AIConfigManager(context)
@@ -60,6 +63,7 @@ class AIService(private val context: Context) {
     private val autonomousGoalRuntime = AutonomousGoalRuntime(context)
     private val needDiscoveryManager = NeedDiscoveryManager(context)
     private val nativeToolRegistry = NativeToolSkillRegistry(aiAgentSettings)
+    private val nativeSkillExecutor = NativeSkillExecutor(context, aiAgentSettings, needDiscoveryManager)
     private val paymentStatusWatcher = PaymentStatusEventWatcher.getInstance(context)
     
     // NEW: Message Handlers for cross-cutting concerns
@@ -658,50 +662,94 @@ class AIService(private val context: Context) {
         userMessage: String,
         stepAllowlist: Set<String>?
     ): String {
-        return try {
-            if (functionName.equals("customer_need_probe", ignoreCase = true)) {
-                val latestMessage = args.optString("latest_message").ifBlank { userMessage }
-                val probe = needDiscoveryManager.probe(senderPhone, latestMessage)
-                return JSONObject()
-                    .put("status", "success")
-                    .put("closureReady", probe.closureReady)
-                    .put("knownValues", JSONObject(probe.knownValues))
-                    .put("missingRequiredFieldIds", JSONArray(probe.missingRequiredFieldIds))
-                    .put("suggestedQuestion", probe.suggestedQuestion)
-                    .toString()
+        val skill = nativeToolRegistry.findEnabledSkill(functionName, stepAllowlist)
+            ?: return SkillExecutionResult.ignored("Skill disabled or unknown: $functionName").toJsonString()
+
+        val policy = skill.executionPolicy
+        val maxAttempts = (policy.maxRetries.coerceAtLeast(0) + 1).coerceAtMost(4)
+        var lastErrorMessage = ""
+        var lastResult: SkillExecutionResult? = null
+
+        for (attempt in 1..maxAttempts) {
+            val startedAt = System.currentTimeMillis()
+            val result =
+                runCatching {
+                    withTimeout(policy.timeoutMs.coerceAtLeast(1_000L)) {
+                        nativeSkillExecutor.execute(
+                            skill = skill,
+                            args = args,
+                            senderPhone = senderPhone,
+                            senderName = senderName,
+                            userMessage = userMessage
+                        )
+                    }
+                }.getOrElse { error ->
+                    val elapsed = (System.currentTimeMillis() - startedAt).coerceAtLeast(0L)
+                    lastErrorMessage = error.message ?: "tool execution failed"
+                    SkillExecutionResult.error(
+                        message = lastErrorMessage,
+                        retryable = attempt < maxAttempts,
+                        attempts = attempt,
+                        executionMillis = elapsed
+                    )
+                }
+
+            val elapsed = (System.currentTimeMillis() - startedAt).coerceAtLeast(0L)
+            val enriched = result.copy(attempts = attempt, executionMillis = elapsed)
+            lastResult = enriched
+
+            if (enriched.status.equals("success", ignoreCase = true)) {
+                return enriched.toJsonString()
             }
 
-            val command = nativeToolRegistry.buildCommandForCall(functionName, args, stepAllowlist)
-            if (command.isNullOrBlank()) {
-                return JSONObject()
-                    .put("status", "ignored")
-                    .put("message", "Skill disabled or invalid arguments")
-                    .toString()
+            val shouldRetry = enriched.status == "error" && enriched.retryable && attempt < maxAttempts
+            if (shouldRetry) {
+                continue
             }
-
-            val handlers = getFollowUpHandlersForTemplate(senderPhone, senderName)
-            val execution =
-                executeProcessorAndHandlers(
-                    message = userMessage,
-                    response = command,
-                    senderPhone = senderPhone,
-                    senderName = senderName,
-                    handlers = handlers
-                )
-
-            JSONObject()
-                .put("status", "success")
-                .put("command", command)
-                .put("tool_actions", JSONArray(execution.toolActions))
-                .put("response", execution.response)
-                .put("should_stop_chain", execution.shouldStopChain)
-                .toString()
-        } catch (e: Exception) {
-            JSONObject()
-                .put("status", "error")
-                .put("message", e.message ?: "tool execution failed")
-                .toString()
+            break
         }
+
+        val fallbackCommand = nativeToolRegistry.buildCommandForCall(functionName, args, stepAllowlist)
+        if (!fallbackCommand.isNullOrBlank()) {
+            return runCatching {
+                val handlers = getFollowUpHandlersForTemplate(senderPhone, senderName)
+                val execution =
+                    executeProcessorAndHandlers(
+                        message = userMessage,
+                        response = fallbackCommand,
+                        senderPhone = senderPhone,
+                        senderName = senderName,
+                        handlers = handlers
+                    )
+
+                SkillExecutionResult.success(
+                    message = "Executed via legacy fallback",
+                    payload = JSONObject()
+                        .put("command", fallbackCommand)
+                        .put("response", execution.response),
+                    toolActions = execution.toolActions,
+                    shouldStopChain = execution.shouldStopChain,
+                    usedFallback = true,
+                    attempts = maxAttempts
+                ).toJsonString()
+            }.getOrElse { error ->
+                SkillExecutionResult.error(
+                    message = error.message ?: "Legacy fallback execution failed",
+                    retryable = false,
+                    payload = JSONObject().put("command", fallbackCommand),
+                    attempts = maxAttempts,
+                    usedFallback = true
+                ).toJsonString()
+            }
+        }
+
+        return (lastResult
+            ?: SkillExecutionResult.error(
+                message = lastErrorMessage.ifBlank { "Tool execution failed" },
+                retryable = false,
+                attempts = maxAttempts
+            )
+            ).toJsonString()
     }
 
     private fun parseToolArguments(raw: String): JSONObject {
@@ -751,7 +799,7 @@ class AIService(private val context: Context) {
         senderPhone: String = "",
         fromAutonomousRuntime: Boolean = false
     ): String = withContext(Dispatchers.IO) {
-        android.util.Log.d("AIService", "ðŸš€ generateReply STARTED")
+        android.util.Log.d("AIService", "Ã°Å¸Å¡â‚¬ generateReply STARTED")
         android.util.Log.d("AIService", "Provider: ${provider.displayName}, Sender: $senderName, Phone: $senderPhone")
         android.util.Log.d("AIService", "Message: $message")
         
@@ -759,7 +807,7 @@ class AIService(private val context: Context) {
         android.util.Log.d("AIService", "Config loaded, API Key present: ${config.apiKey.isNotEmpty()}")
         
         if (config.apiKey.isEmpty()) {
-            android.util.Log.e("AIService", "âŒ API Key is empty!")
+            android.util.Log.e("AIService", "Ã¢ÂÅ’ API Key is empty!")
             return@withContext "AI not configured. Please add API key."
         }
         
@@ -782,7 +830,7 @@ class AIService(private val context: Context) {
 
         }
         
-        android.util.Log.d("AIService", "ðŸ” Starting profile enrichment and intent detection...")
+        android.util.Log.d("AIService", "Ã°Å¸â€Â Starting profile enrichment and intent detection...")
         
         // Auto-enrich profile from sheet if first contact
         if (aiAgentSettings.isAgentEnabled && senderPhone.isNotBlank()) {
@@ -870,7 +918,7 @@ class AIService(private val context: Context) {
                     baseContext
                 }
             } catch (e: Exception) {
-                android.util.Log.e("AIService", "âŒ AI Agent context building failed: ${e.message}", e)
+                android.util.Log.e("AIService", "Ã¢ÂÅ’ AI Agent context building failed: ${e.message}", e)
                 // Fallback to legacy prompt
                 val base = businessDataManager.buildAIPrompt(provider, message, senderName)
                 "$base\n\n${config.responseLength.instruction}"
@@ -923,12 +971,16 @@ class AIService(private val context: Context) {
         // NEW ARCHITECTURE: Use processors and handlers
         if (aiAgentSettings.isAgentEnabled && senderPhone.isNotBlank()) {
             val maxExecutionRounds =
-                if (aiAgentSettings.activeTemplate.equals("CUSTOM", ignoreCase = true)) 4 else 2
+                if (aiAgentSettings.activeTemplate.equals("CUSTOM", ignoreCase = true)) {
+                    aiAgentSettings.customTemplateAutonomousMaxRounds.coerceAtLeast(1)
+                } else {
+                    2
+                }
             val executedActions = linkedSetOf<String>()
             var roundIndex = 0
             var nextRoundResponse = cleanedResponse
 
-            while (true) {
+            while (roundIndex < maxExecutionRounds) {
                 val handlers =
                     if (roundIndex == 0) getMessageHandlersForTemplate(senderPhone, senderName)
                     else getFollowUpHandlersForTemplate(senderPhone, senderName)
@@ -1152,7 +1204,7 @@ class AIService(private val context: Context) {
             // Log score improvement
             val improvement = leadScorer.calculateScoreImprovement(oldScore, newScore)
             if (improvement != 0) {
-                android.util.Log.d("AIService", "Lead score updated: $oldScore â†’ $newScore (${if (improvement > 0) "+" else ""}$improvement)")
+                android.util.Log.d("AIService", "Lead score updated: $oldScore Ã¢â€ â€™ $newScore (${if (improvement > 0) "+" else ""}$improvement)")
             }
         } catch (e: Exception) {
             android.util.Log.e("AIService", "Lead score update failed: ${e.message}")
@@ -1277,7 +1329,7 @@ class AIService(private val context: Context) {
         cleaned = cleaned.replace(Regex("`(.+?)`"), "$1")
         
         // Remove bullet points but keep the text
-        cleaned = cleaned.replace(Regex("^[â€¢Â·âˆ™â—¦â–ªâ–«]\\s*", RegexOption.MULTILINE), "")
+        cleaned = cleaned.replace(Regex("^[Ã¢â‚¬Â¢Ã‚Â·Ã¢Ë†â„¢Ã¢â€”Â¦Ã¢â€“ÂªÃ¢â€“Â«]\\s*", RegexOption.MULTILINE), "")
         
         // Clean up extra whitespace
         cleaned = cleaned.replace(Regex("\\n{3,}"), "\n\n")
@@ -1342,13 +1394,13 @@ class AIService(private val context: Context) {
         val apiKey = config.apiKey
         val model = config.model
         return try {
-            android.util.Log.d("AIService", "ðŸš€ Calling Gemini API with model: $model")
-            android.util.Log.d("AIService", "ðŸ“ Prompt length: ${prompt.length} chars")
+            android.util.Log.d("AIService", "Ã°Å¸Å¡â‚¬ Calling Gemini API with model: $model")
+            android.util.Log.d("AIService", "Ã°Å¸â€œÂ Prompt length: ${prompt.length} chars")
             
             val url = URL("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey")
             val connection = url.openConnection() as HttpURLConnection
             
-            android.util.Log.d("AIService", "ðŸ”— Connection created, setting properties...")
+            android.util.Log.d("AIService", "Ã°Å¸â€â€” Connection created, setting properties...")
             
             connection.requestMethod = "POST"
             connection.setRequestProperty("Content-Type", "application/json")
@@ -1399,16 +1451,16 @@ class AIService(private val context: Context) {
                 })
             }
             
-            android.util.Log.d("AIService", "ðŸ“¤ Sending request to Gemini...")
+            android.util.Log.d("AIService", "Ã°Å¸â€œÂ¤ Sending request to Gemini...")
             android.util.Log.d("AIService", "Request body: ${requestBody.toString()}")
             connection.outputStream.use { it.write(requestBody.toString().toByteArray()) }
             
-            android.util.Log.d("AIService", "â³ Waiting for response...")
+            android.util.Log.d("AIService", "Ã¢ÂÂ³ Waiting for response...")
             android.util.Log.d("AIService", "Response code: ${connection.responseCode}")
             
             if (connection.responseCode != 200) {
                 val errorStream = connection.errorStream?.bufferedReader()?.readText() ?: "Unknown error"
-                android.util.Log.e("AIService", "âŒ Gemini API Error ${connection.responseCode}: $errorStream")
+                android.util.Log.e("AIService", "Ã¢ÂÅ’ Gemini API Error ${connection.responseCode}: $errorStream")
                 android.util.Log.e("AIService", "Gemini API Error: $errorStream")
                 return "Error ${connection.responseCode}: $errorStream"
             }
@@ -1593,7 +1645,7 @@ class AIService(private val context: Context) {
                     templateType = "GENERAL"
                 )
 
-                return "✅ Reminder set for $date at $time:\n\"$contextText\""
+                return "âœ… Reminder set for $date at $time:\n\"$contextText\""
             }
         } catch (e: Exception) {
             android.util.Log.e("AIService", "Reminder extraction failed: ${e.message}")
@@ -1623,7 +1675,7 @@ class AIService(private val context: Context) {
         }
 
         stringBuilder.append("\n\n")
-        stringBuilder.append("🔴 URGENT TASK: Generate a reminder message to send to a customer.\n")
+        stringBuilder.append("ðŸ”´ URGENT TASK: Generate a reminder message to send to a customer.\n")
         stringBuilder.append("Customer Name: $name\n")
         stringBuilder.append("Customer Phone: $phone\n")
         stringBuilder.append("Event Date/Time: $dateTime\n")
@@ -1646,6 +1698,13 @@ class AIService(private val context: Context) {
         }
     }
 }
+
+
+
+
+
+
+
 
 
 

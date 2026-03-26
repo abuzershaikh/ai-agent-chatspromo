@@ -3,6 +3,7 @@
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.concurrent.TimeUnit
 
 class AutonomousUserStateStore(context: Context) {
 
@@ -25,6 +26,7 @@ class AutonomousUserStateStore(context: Context) {
         } else {
             states += normalized
         }
+        pruneStates(states)
         saveStates(states)
     }
 
@@ -32,6 +34,20 @@ class AutonomousUserStateStore(context: Context) {
     fun updateState(senderPhone: String, transform: (AutonomousUserState?) -> AutonomousUserState) {
         val updated = transform(getState(senderPhone))
         upsertState(updated)
+    }
+
+    private fun pruneStates(states: MutableList<AutonomousUserState>) {
+        val now = System.currentTimeMillis()
+        states.removeAll { state ->
+            state.updatedAt > 0L && (now - state.updatedAt) > STATE_RETENTION_MS
+        }
+
+        if (states.size <= MAX_STATES) return
+
+        states.sortBy { it.updatedAt }
+        while (states.size > MAX_STATES) {
+            states.removeAt(0)
+        }
     }
 
     @Synchronized
@@ -90,5 +106,7 @@ class AutonomousUserStateStore(context: Context) {
     companion object {
         private const val PREFS_NAME = "ai_agent_autonomous_state"
         private const val KEY_STATES = "states_json"
+        private const val MAX_STATES = 2000
+        private val STATE_RETENTION_MS = TimeUnit.DAYS.toMillis(30)
     }
 }

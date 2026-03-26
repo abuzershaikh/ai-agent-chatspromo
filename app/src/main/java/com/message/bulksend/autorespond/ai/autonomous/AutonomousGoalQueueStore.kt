@@ -4,6 +4,7 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 class AutonomousGoalQueueStore(context: Context) {
 
@@ -16,10 +17,24 @@ class AutonomousGoalQueueStore(context: Context) {
         goal: String,
         lastUserMessage: String,
         dedupeKey: String,
-        maxQueue: Int
+        maxQueue: Int,
+        maxQueuePerSender: Int,
+        replaceExistingActiveForSender: Boolean = false,
+        preserveDedupePrefixes: Set<String> = emptySet()
     ): AutonomousGoalQueueItem {
         val now = System.currentTimeMillis()
         val items = loadItems().toMutableList()
+
+        if (replaceExistingActiveForSender && senderPhone.isNotBlank()) {
+            items.removeAll { item ->
+                isActiveStatus(item.status) &&
+                    item.senderPhone == senderPhone &&
+                    !item.dedupeKey.equals(dedupeKey, ignoreCase = true) &&
+                    preserveDedupePrefixes.none { prefix ->
+                        prefix.isNotBlank() && item.dedupeKey.startsWith(prefix, ignoreCase = true)
+                    }
+            }
+        }
 
         val existingIndex =
             items.indexOfFirst {
@@ -36,9 +51,11 @@ class AutonomousGoalQueueStore(context: Context) {
                     goal = goal,
                     lastUserMessage = lastUserMessage,
                     status = AutonomousGoalQueueItem.STATUS_WAITING,
+                    attempts = 0,
                     nextRunAt = now,
                     updatedAt = now,
-                    lastError = ""
+                    lastError = "",
+                    lastAgentMessage = ""
                 )
             } else {
                 AutonomousGoalQueueItem(
@@ -62,15 +79,67 @@ class AutonomousGoalQueueStore(context: Context) {
             items += updated
         }
 
-        enforceQueueBounds(items, maxQueue)
+        enforceQueueBounds(items, maxQueue, maxQueuePerSender, senderPhone)
         saveItems(items)
         return updated
     }
 
     @Synchronized
-    fun getRunnableGoals(now: Long, maxGoals: Int): List<AutonomousGoalQueueItem> {
+    fun cancelActiveGoalsForSender(
+        senderPhone: String,
+        preserveDedupePrefixes: Set<String> = emptySet()
+    ): Int {
+        val sender = senderPhone.trim()
+        if (sender.isBlank()) return 0
+
+        val items = loadItems().toMutableList()
+        val before = items.size
+        items.removeAll { item ->
+            isActiveStatus(item.status) &&
+                item.senderPhone == sender &&
+                preserveDedupePrefixes.none { prefix ->
+                    prefix.isNotBlank() && item.dedupeKey.startsWith(prefix, ignoreCase = true)
+                }
+        }
+
+        val removed = before - items.size
+        if (removed > 0) {
+            saveItems(items)
+        }
+        return removed
+    }
+
+    @Synchronized
+    fun getRunnableGoals(
+        now: Long,
+        maxGoals: Int,
+        staleRunningMs: Long = TimeUnit.MINUTES.toMillis(5)
+    ): List<AutonomousGoalQueueItem> {
         val cap = maxGoals.coerceAtLeast(1)
-        return loadItems()
+        val items = loadItems().toMutableList()
+        val staleBefore = now - staleRunningMs.coerceAtLeast(TimeUnit.MINUTES.toMillis(1))
+        var changed = false
+
+        items.forEachIndexed { index, item ->
+            if (
+                item.status == AutonomousGoalQueueItem.STATUS_RUNNING &&
+                    item.updatedAt <= staleBefore
+            ) {
+                items[index] = item.copy(
+                    status = AutonomousGoalQueueItem.STATUS_WAITING,
+                    nextRunAt = now,
+                    updatedAt = now,
+                    lastError = item.lastError.ifBlank { "Recovered stale running goal" }
+                )
+                changed = true
+            }
+        }
+
+        if (changed) {
+            saveItems(items)
+        }
+
+        return items
             .filter {
                 (it.status == AutonomousGoalQueueItem.STATUS_QUEUED ||
                     it.status == AutonomousGoalQueueItem.STATUS_WAITING) &&
@@ -106,6 +175,19 @@ class AutonomousGoalQueueStore(context: Context) {
     }
 
     @Synchronized
+    fun markWaitingAfterOutbound(id: String, nextRunAt: Long, outboundText: String) {
+        update(id) { item ->
+            item.copy(
+                status = AutonomousGoalQueueItem.STATUS_WAITING,
+                nextRunAt = nextRunAt,
+                updatedAt = System.currentTimeMillis(),
+                lastError = "",
+                lastAgentMessage = outboundText.trim()
+            )
+        }
+    }
+
+    @Synchronized
     fun markCompleted(id: String) {
         update(id) { item ->
             item.copy(
@@ -132,11 +214,7 @@ class AutonomousGoalQueueStore(context: Context) {
 
     @Synchronized
     fun queueSize(): Int {
-        return loadItems().count {
-            it.status == AutonomousGoalQueueItem.STATUS_QUEUED ||
-                it.status == AutonomousGoalQueueItem.STATUS_WAITING ||
-                it.status == AutonomousGoalQueueItem.STATUS_RUNNING
-        }
+        return loadItems().count { isActiveStatus(it.status) }
     }
 
     @Synchronized
@@ -152,7 +230,15 @@ class AutonomousGoalQueueStore(context: Context) {
         prefs.edit().putString(KEY_LAST_ERROR, error.trim()).apply()
     }
 
-    private fun enforceQueueBounds(items: MutableList<AutonomousGoalQueueItem>, maxQueue: Int) {
+    private fun enforceQueueBounds(
+        items: MutableList<AutonomousGoalQueueItem>,
+        maxQueue: Int,
+        maxQueuePerSender: Int,
+        preferredSenderPhone: String
+    ) {
+        pruneOldTerminalItems(items)
+        enforcePerSenderQueueBounds(items, maxQueuePerSender, preferredSenderPhone)
+
         val cap = maxQueue.coerceAtLeast(1)
         if (items.size <= cap) return
 
@@ -181,6 +267,49 @@ class AutonomousGoalQueueStore(context: Context) {
                 items.removeAt(0)
             }
         }
+    }
+
+    private fun pruneOldTerminalItems(items: MutableList<AutonomousGoalQueueItem>) {
+        val now = System.currentTimeMillis()
+        items.removeAll { item ->
+            (item.status == AutonomousGoalQueueItem.STATUS_COMPLETED ||
+                item.status == AutonomousGoalQueueItem.STATUS_FAILED) &&
+                (now - item.updatedAt) > TERMINAL_RETENTION_MS
+        }
+    }
+
+    private fun enforcePerSenderQueueBounds(
+        items: MutableList<AutonomousGoalQueueItem>,
+        maxQueuePerSender: Int,
+        preferredSenderPhone: String
+    ) {
+        val cap = maxQueuePerSender.coerceAtLeast(1)
+        val sender = preferredSenderPhone.trim()
+        if (sender.isBlank()) return
+
+        while (items.count { it.senderPhone == sender } > cap) {
+            val removable =
+                items
+                    .filter { it.senderPhone == sender }
+                    .sortedWith(
+                        compareBy<AutonomousGoalQueueItem> {
+                            when (it.status) {
+                                AutonomousGoalQueueItem.STATUS_COMPLETED -> 0
+                                AutonomousGoalQueueItem.STATUS_FAILED -> 1
+                                else -> 2
+                            }
+                        }.thenBy { it.updatedAt }
+                    )
+                    .firstOrNull()
+                    ?: break
+            items.removeAll { it.id == removable.id }
+        }
+    }
+
+    private fun isActiveStatus(status: String): Boolean {
+        return status == AutonomousGoalQueueItem.STATUS_QUEUED ||
+            status == AutonomousGoalQueueItem.STATUS_WAITING ||
+            status == AutonomousGoalQueueItem.STATUS_RUNNING
     }
 
     @Synchronized
@@ -213,11 +342,13 @@ class AutonomousGoalQueueStore(context: Context) {
                         dedupeKey = obj.optString("dedupeKey"),
                         createdAt = obj.optLong("createdAt", 0L),
                         updatedAt = obj.optLong("updatedAt", 0L),
-                        lastError = obj.optString("lastError")
+                        lastError = obj.optString("lastError"),
+                        lastAgentMessage = obj.optString("lastAgentMessage")
                     )
             }
             out
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            setLastError("Queue parse error: ${error.message}")
             emptyList()
         }
     }
@@ -240,6 +371,7 @@ class AutonomousGoalQueueStore(context: Context) {
                     .put("createdAt", item.createdAt)
                     .put("updatedAt", item.updatedAt)
                     .put("lastError", item.lastError)
+                    .put("lastAgentMessage", item.lastAgentMessage)
             )
         }
         prefs.edit().putString(KEY_ITEMS, arr.toString()).apply()
@@ -250,5 +382,6 @@ class AutonomousGoalQueueStore(context: Context) {
         private const val KEY_ITEMS = "items_json"
         private const val KEY_LAST_HEARTBEAT_AT = "last_heartbeat_at"
         private const val KEY_LAST_ERROR = "last_error"
+        private val TERMINAL_RETENTION_MS = TimeUnit.DAYS.toMillis(2)
     }
 }
