@@ -1,4 +1,4 @@
-﻿package com.message.bulksend.autorespond.ai.autonomous
+package com.message.bulksend.autorespond.ai.autonomous
 
 import android.content.Context
 import org.json.JSONArray
@@ -55,7 +55,16 @@ class AutonomousGoalQueueStore(context: Context) {
                     nextRunAt = now,
                     updatedAt = now,
                     lastError = "",
-                    lastAgentMessage = ""
+                    lastAgentMessage = "",
+                    continuationState =
+                        updateContinuationState(
+                            current = current.continuationState,
+                            inbound = lastUserMessage,
+                            outbound = "",
+                            decision = "goal_refreshed",
+                            updatedAt = now,
+                            resetRounds = true
+                        )
                 )
             } else {
                 AutonomousGoalQueueItem(
@@ -69,7 +78,8 @@ class AutonomousGoalQueueStore(context: Context) {
                     nextRunAt = now,
                     dedupeKey = dedupeKey,
                     createdAt = now,
-                    updatedAt = now
+                    updatedAt = now,
+                    continuationState = initialContinuationState(lastUserMessage, now)
                 )
             }
 
@@ -125,12 +135,19 @@ class AutonomousGoalQueueStore(context: Context) {
                 item.status == AutonomousGoalQueueItem.STATUS_RUNNING &&
                     item.updatedAt <= staleBefore
             ) {
-                items[index] = item.copy(
-                    status = AutonomousGoalQueueItem.STATUS_WAITING,
-                    nextRunAt = now,
-                    updatedAt = now,
-                    lastError = item.lastError.ifBlank { "Recovered stale running goal" }
-                )
+                items[index] =
+                    item.copy(
+                        status = AutonomousGoalQueueItem.STATUS_WAITING,
+                        nextRunAt = now,
+                        updatedAt = now,
+                        lastError = item.lastError.ifBlank { "Recovered stale running goal" },
+                        continuationState =
+                            updateContinuationState(
+                                current = item.continuationState,
+                                decision = "stale_run_recovered",
+                                updatedAt = now
+                            )
+                    )
                 changed = true
             }
         }
@@ -152,11 +169,21 @@ class AutonomousGoalQueueStore(context: Context) {
     @Synchronized
     fun markRunning(id: String) {
         update(id) { item ->
+            val now = System.currentTimeMillis()
+            val currentRound = item.attempts + 1
             item.copy(
                 status = AutonomousGoalQueueItem.STATUS_RUNNING,
-                attempts = item.attempts + 1,
-                updatedAt = System.currentTimeMillis(),
-                lastError = ""
+                attempts = currentRound,
+                updatedAt = now,
+                lastError = "",
+                continuationState =
+                    updateContinuationState(
+                        current = item.continuationState,
+                        inbound = item.lastUserMessage,
+                        decision = "running_round_$currentRound",
+                        updatedAt = now,
+                        incrementRound = true
+                    )
             )
         }
     }
@@ -164,37 +191,76 @@ class AutonomousGoalQueueStore(context: Context) {
     @Synchronized
     fun markWaiting(id: String, nextRunAt: Long, error: String = "") {
         update(id) { item ->
+            val now = System.currentTimeMillis()
+            val normalizedError = error.trim()
             item.copy(
                 status = AutonomousGoalQueueItem.STATUS_WAITING,
                 nextRunAt = nextRunAt,
-                updatedAt = System.currentTimeMillis(),
-                lastError = error.trim()
+                updatedAt = now,
+                lastError = normalizedError,
+                continuationState =
+                    updateContinuationState(
+                        current = item.continuationState,
+                        inbound = item.lastUserMessage,
+                        outbound = item.lastAgentMessage,
+                        decision =
+                            if (normalizedError.isBlank()) {
+                                "waiting"
+                            } else {
+                                "waiting_error:${normalizeSnippet(normalizedError)}"
+                            },
+                        updatedAt = now
+                    )
             )
         }
         if (error.isNotBlank()) setLastError(error)
     }
 
     @Synchronized
-    fun markWaitingAfterOutbound(id: String, nextRunAt: Long, outboundText: String) {
+    fun markWaitingAfterOutbound(
+        id: String,
+        nextRunAt: Long,
+        outboundText: String,
+        toolActions: List<String> = emptyList()
+    ) {
         update(id) { item ->
+            val now = System.currentTimeMillis()
             item.copy(
                 status = AutonomousGoalQueueItem.STATUS_WAITING,
                 nextRunAt = nextRunAt,
-                updatedAt = System.currentTimeMillis(),
+                updatedAt = now,
                 lastError = "",
-                lastAgentMessage = outboundText.trim()
+                lastAgentMessage = outboundText.trim(),
+                continuationState =
+                    updateContinuationState(
+                        current = item.continuationState,
+                        inbound = item.lastUserMessage,
+                        outbound = outboundText,
+                        toolActions = toolActions,
+                        decision = "waiting_after_outbound",
+                        updatedAt = now
+                    )
             )
         }
     }
 
     @Synchronized
-    fun markCompleted(id: String) {
+    fun markCompleted(id: String, reason: String = "Goal completed") {
         update(id) { item ->
+            val now = System.currentTimeMillis()
             item.copy(
                 status = AutonomousGoalQueueItem.STATUS_COMPLETED,
                 nextRunAt = Long.MAX_VALUE,
-                updatedAt = System.currentTimeMillis(),
-                lastError = ""
+                updatedAt = now,
+                lastError = "",
+                continuationState =
+                    updateContinuationState(
+                        current = item.continuationState,
+                        inbound = item.lastUserMessage,
+                        outbound = item.lastAgentMessage,
+                        decision = "completed:${normalizeSnippet(reason)}",
+                        updatedAt = now
+                    )
             )
         }
     }
@@ -202,11 +268,21 @@ class AutonomousGoalQueueStore(context: Context) {
     @Synchronized
     fun markFailed(id: String, error: String) {
         update(id) { item ->
+            val now = System.currentTimeMillis()
+            val normalizedError = error.trim()
             item.copy(
                 status = AutonomousGoalQueueItem.STATUS_FAILED,
                 nextRunAt = Long.MAX_VALUE,
-                updatedAt = System.currentTimeMillis(),
-                lastError = error.trim()
+                updatedAt = now,
+                lastError = normalizedError,
+                continuationState =
+                    updateContinuationState(
+                        current = item.continuationState,
+                        inbound = item.lastUserMessage,
+                        outbound = item.lastAgentMessage,
+                        decision = "failed:${normalizeSnippet(normalizedError)}",
+                        updatedAt = now
+                    )
             )
         }
         setLastError(error)
@@ -329,21 +405,31 @@ class AutonomousGoalQueueStore(context: Context) {
             val out = mutableListOf<AutonomousGoalQueueItem>()
             for (i in 0 until arr.length()) {
                 val obj = arr.optJSONObject(i) ?: continue
+                val updatedAt = obj.optLong("updatedAt", 0L)
+                val lastUserMessage = obj.optString("lastUserMessage")
+                val lastAgentMessage = obj.optString("lastAgentMessage")
                 out +=
                     AutonomousGoalQueueItem(
                         id = obj.optString("id"),
                         senderPhone = obj.optString("senderPhone"),
                         senderName = obj.optString("senderName"),
                         goal = obj.optString("goal"),
-                        lastUserMessage = obj.optString("lastUserMessage"),
+                        lastUserMessage = lastUserMessage,
                         status = obj.optString("status", AutonomousGoalQueueItem.STATUS_QUEUED),
                         attempts = obj.optInt("attempts", 0),
                         nextRunAt = obj.optLong("nextRunAt", 0L),
                         dedupeKey = obj.optString("dedupeKey"),
                         createdAt = obj.optLong("createdAt", 0L),
-                        updatedAt = obj.optLong("updatedAt", 0L),
+                        updatedAt = updatedAt,
                         lastError = obj.optString("lastError"),
-                        lastAgentMessage = obj.optString("lastAgentMessage")
+                        lastAgentMessage = lastAgentMessage,
+                        continuationState =
+                            parseContinuationState(
+                                obj = obj.optJSONObject("continuationState"),
+                                fallbackInbound = lastUserMessage,
+                                fallbackOutbound = lastAgentMessage,
+                                updatedAt = updatedAt
+                            )
                     )
             }
             out
@@ -372,9 +458,161 @@ class AutonomousGoalQueueStore(context: Context) {
                     .put("updatedAt", item.updatedAt)
                     .put("lastError", item.lastError)
                     .put("lastAgentMessage", item.lastAgentMessage)
+                    .put("continuationState", buildContinuationJson(item.continuationState))
             )
         }
         prefs.edit().putString(KEY_ITEMS, arr.toString()).apply()
+    }
+
+    private fun parseContinuationState(
+        obj: JSONObject?,
+        fallbackInbound: String,
+        fallbackOutbound: String,
+        updatedAt: Long
+    ): AutonomousContinuationState {
+        if (obj == null) {
+            return initialContinuationState(fallbackInbound, updatedAt).let { base ->
+                if (fallbackOutbound.isBlank()) {
+                    base
+                } else {
+                    updateContinuationState(
+                        current = base,
+                        outbound = fallbackOutbound,
+                        decision = "legacy_loaded",
+                        updatedAt = updatedAt
+                    )
+                }
+            }
+        }
+
+        return AutonomousContinuationState(
+            roundsCompleted = obj.optInt("roundsCompleted", 0),
+            summary = obj.optString("summary"),
+            recentInbound =
+                arrayToStrings(obj.optJSONArray("recentInbound")).ifEmpty {
+                    if (fallbackInbound.isBlank()) emptyList() else listOf(fallbackInbound.trim())
+                },
+            recentOutbound =
+                arrayToStrings(obj.optJSONArray("recentOutbound")).ifEmpty {
+                    if (fallbackOutbound.isBlank()) emptyList() else listOf(fallbackOutbound.trim())
+                },
+            recentToolActions = arrayToStrings(obj.optJSONArray("recentToolActions")),
+            lastDecision = obj.optString("lastDecision"),
+            updatedAt = obj.optLong("updatedAt", updatedAt)
+        )
+    }
+
+    private fun buildContinuationJson(state: AutonomousContinuationState): JSONObject {
+        return JSONObject()
+            .put("roundsCompleted", state.roundsCompleted)
+            .put("summary", state.summary)
+            .put("recentInbound", JSONArray(state.recentInbound))
+            .put("recentOutbound", JSONArray(state.recentOutbound))
+            .put("recentToolActions", JSONArray(state.recentToolActions))
+            .put("lastDecision", state.lastDecision)
+            .put("updatedAt", state.updatedAt)
+    }
+
+    private fun initialContinuationState(lastUserMessage: String, at: Long): AutonomousContinuationState {
+        return updateContinuationState(
+            current = AutonomousContinuationState(),
+            inbound = lastUserMessage,
+            decision = "queued",
+            updatedAt = at,
+            resetRounds = true
+        )
+    }
+
+    private fun updateContinuationState(
+        current: AutonomousContinuationState,
+        inbound: String? = null,
+        outbound: String? = null,
+        toolActions: List<String> = emptyList(),
+        decision: String? = null,
+        updatedAt: Long,
+        incrementRound: Boolean = false,
+        resetRounds: Boolean = false
+    ): AutonomousContinuationState {
+        val inboundMessages = appendRecent(current.recentInbound, inbound, MAX_RECENT_INBOUND)
+        val outboundMessages = appendRecent(current.recentOutbound, outbound, MAX_RECENT_OUTBOUND)
+        val actions = appendActionHints(current.recentToolActions, toolActions)
+
+        val rounds =
+            when {
+                resetRounds -> 0
+                incrementRound -> current.roundsCompleted + 1
+                else -> current.roundsCompleted
+            }
+        val normalizedDecision = decision?.trim().orEmpty().ifBlank { current.lastDecision }
+
+        return AutonomousContinuationState(
+            roundsCompleted = rounds,
+            summary = buildContinuationSummary(rounds, inboundMessages, outboundMessages, actions, normalizedDecision),
+            recentInbound = inboundMessages,
+            recentOutbound = outboundMessages,
+            recentToolActions = actions,
+            lastDecision = normalizedDecision,
+            updatedAt = updatedAt
+        )
+    }
+
+    private fun buildContinuationSummary(
+        rounds: Int,
+        inbound: List<String>,
+        outbound: List<String>,
+        actions: List<String>,
+        decision: String
+    ): String {
+        val latestInbound = inbound.lastOrNull()?.let(::normalizeSnippet) ?: "N/A"
+        val latestOutbound = outbound.lastOrNull()?.let(::normalizeSnippet) ?: "N/A"
+        val actionSummary = if (actions.isEmpty()) "none" else actions.joinToString(", ") { normalizeSnippet(it) }
+        val normalizedDecision = decision.trim().ifBlank { "in_progress" }
+        return "rounds=$rounds; latest_user=$latestInbound; latest_agent=$latestOutbound; actions=$actionSummary; state=${normalizeSnippet(normalizedDecision)}"
+            .take(600)
+    }
+
+    private fun appendRecent(existing: List<String>, candidate: String?, max: Int): List<String> {
+        val normalized = candidate?.trim().orEmpty()
+        if (normalized.isBlank()) return existing.takeLast(max)
+
+        val list = existing.toMutableList()
+        val last = list.lastOrNull()
+        if (last == null || !last.equals(normalized, ignoreCase = true)) {
+            list += normalized
+        }
+        return list.takeLast(max)
+    }
+
+    private fun appendActionHints(existing: List<String>, newActions: List<String>): List<String> {
+        if (newActions.isEmpty()) return existing.takeLast(MAX_RECENT_ACTIONS)
+        var updated = existing.toMutableList()
+        newActions.forEach { action ->
+            val normalized = normalizeSnippet(action)
+            if (normalized.isBlank()) return@forEach
+            if (updated.none { it.equals(normalized, ignoreCase = true) }) {
+                updated += normalized
+            }
+        }
+        if (updated.size > MAX_RECENT_ACTIONS) {
+            updated = updated.takeLast(MAX_RECENT_ACTIONS).toMutableList()
+        }
+        return updated
+    }
+
+    private fun normalizeSnippet(text: String): String {
+        return text.trim().replace(Regex("\\s+"), " ").take(160)
+    }
+
+    private fun arrayToStrings(array: JSONArray?): List<String> {
+        if (array == null || array.length() == 0) return emptyList()
+        val values = mutableListOf<String>()
+        for (index in 0 until array.length()) {
+            val value = array.optString(index).trim()
+            if (value.isNotBlank()) {
+                values += value
+            }
+        }
+        return values
     }
 
     companion object {
@@ -382,6 +620,9 @@ class AutonomousGoalQueueStore(context: Context) {
         private const val KEY_ITEMS = "items_json"
         private const val KEY_LAST_HEARTBEAT_AT = "last_heartbeat_at"
         private const val KEY_LAST_ERROR = "last_error"
+        private const val MAX_RECENT_INBOUND = 4
+        private const val MAX_RECENT_OUTBOUND = 4
+        private const val MAX_RECENT_ACTIONS = 6
         private val TERMINAL_RETENTION_MS = TimeUnit.DAYS.toMillis(2)
     }
 }

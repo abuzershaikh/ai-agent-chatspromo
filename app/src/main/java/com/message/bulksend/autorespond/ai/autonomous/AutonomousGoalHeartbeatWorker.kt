@@ -1,4 +1,4 @@
-﻿package com.message.bulksend.autorespond.ai.autonomous
+package com.message.bulksend.autorespond.ai.autonomous
 
 import android.content.Context
 import androidx.work.CoroutineWorker
@@ -58,7 +58,7 @@ class AutonomousGoalHeartbeatWorker(
 
             candidates.forEach { item ->
                 if (runtime.isGoalCompletedForSender(item.senderPhone)) {
-                    queueStore.markCompleted(item.id)
+                    queueStore.markCompleted(item.id, reason = "Goal already completed before round")
                     return@forEach
                 }
 
@@ -66,9 +66,9 @@ class AutonomousGoalHeartbeatWorker(
                 val currentRound = item.attempts + 1
 
                 val prompt = buildHeartbeatPrompt(item, currentRound)
-                val aiReply =
+                val aiReplyResult =
                     runCatching {
-                        aiService.generateReply(
+                        aiService.generateReplyResult(
                             provider = provider,
                             message = prompt,
                             senderName = item.senderName.ifBlank { "User" },
@@ -81,22 +81,23 @@ class AutonomousGoalHeartbeatWorker(
                     }
 
                 if (runtime.isGoalCompletedForSender(item.senderPhone)) {
-                    queueStore.markCompleted(item.id)
+                    queueStore.markCompleted(item.id, reason = "Goal completed during autonomous turn")
                     return@forEach
                 }
 
-                val outgoingText = aiReply.trim()
+                val outgoingText = aiReplyResult.text.trim()
                 if (outgoingText.isBlank()) {
                     handleAttemptFailure(item, maxAttempts, "AI returned empty text")
                     return@forEach
                 }
 
                 val stateHash = buildStateHash(item)
-                val decision = runtime.evaluateDispatch(
-                    senderPhone = item.senderPhone,
-                    stateHash = stateHash,
-                    outgoingText = outgoingText
-                )
+                val decision =
+                    runtime.evaluateDispatch(
+                        senderPhone = item.senderPhone,
+                        stateHash = stateHash,
+                        outgoingText = outgoingText
+                    )
                 if (!decision.canSend) {
                     queueStore.markWaiting(
                         id = item.id,
@@ -137,7 +138,7 @@ class AutonomousGoalHeartbeatWorker(
                     )
 
                 if (completion.isCompleted) {
-                    queueStore.markCompleted(item.id)
+                    queueStore.markCompleted(item.id, reason = completion.reason)
                     return@forEach
                 }
 
@@ -153,7 +154,8 @@ class AutonomousGoalHeartbeatWorker(
                 queueStore.markWaitingAfterOutbound(
                     id = item.id,
                     nextRunAt = nextRunAt,
-                    outboundText = outgoingText
+                    outboundText = outgoingText,
+                    toolActions = if (aiReplyResult.toolActions.isNotEmpty()) aiReplyResult.toolActions else extractActionHints(outgoingText)
                 )
                 scheduleRetryKickAt(nextRunAt)
             }
@@ -177,13 +179,26 @@ class AutonomousGoalHeartbeatWorker(
     }
 
     private fun buildHeartbeatPrompt(item: AutonomousGoalQueueItem, currentRound: Int): String {
+        val continuation = item.continuationState
         val previousOutbound = item.lastAgentMessage.trim()
+        val recentInbound = continuation.recentInbound.takeLast(3).joinToString(" | ").ifBlank { "N/A" }
+        val recentOutbound = continuation.recentOutbound.takeLast(3).joinToString(" | ").ifBlank { "N/A" }
+        val recentActions = continuation.recentToolActions.takeLast(4).joinToString(", ").ifBlank { "none" }
+        val continuationSummary = continuation.summary.trim().ifBlank { "No continuation summary yet" }
+
         return """
             [AUTONOMOUS_HEARTBEAT]
             Primary Goal: ${item.goal}
             Goal Round: $currentRound
             Last user message: ${item.lastUserMessage}
             Previous autonomous outbound: ${if (previousOutbound.isBlank()) "N/A" else previousOutbound}
+
+            [CONTINUATION STATE]
+            Summary: $continuationSummary
+            Last decision: ${continuation.lastDecision.ifBlank { "N/A" }}
+            Recent inbound context: $recentInbound
+            Recent autonomous replies: $recentOutbound
+            Recent tool/action hints: $recentActions
 
             Continue this chat in human style.
             Ask one relevant question if details are missing.
@@ -194,9 +209,20 @@ class AutonomousGoalHeartbeatWorker(
     }
 
     private fun buildStateHash(item: AutonomousGoalQueueItem): String {
-        return "${item.senderPhone}|${item.goal.trim().lowercase()}|${item.lastUserMessage.trim().lowercase()}"
+        val continuation = item.continuationState.summary.trim().lowercase()
+        return "${item.senderPhone}|${item.goal.trim().lowercase()}|${item.lastUserMessage.trim().lowercase()}|$continuation"
             .replace(Regex("\\s+"), " ")
-            .take(320)
+            .take(500)
+    }
+
+    private fun extractActionHints(text: String): List<String> {
+        if (text.isBlank()) return emptyList()
+        val matches = TOOL_LIKE_PATTERN.findAll(text)
+            .map { it.value.trim() }
+            .filter { it.isNotBlank() }
+            .distinctBy { it.lowercase() }
+            .toList()
+        return matches.take(6)
     }
 
     private fun nextRunAt(previousAttempts: Int): Long {
@@ -212,10 +238,10 @@ class AutonomousGoalHeartbeatWorker(
 
     companion object {
         private val runLock = Mutex()
+        private val TOOL_LIKE_PATTERN =
+            Regex("\\[[A-Z][A-Z0-9_\\-: ]{2,}\\]", RegexOption.IGNORE_CASE)
     }
 }
-
-
 
 
 

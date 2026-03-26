@@ -362,6 +362,12 @@ class AIAgentSettingsManager(context: Context) {
         set(value) = prefs.edit()
             .putInt("custom_template_conversation_history_limit", value.coerceIn(5, 100))
             .apply()
+
+    var customTemplateLongChatSummaryEnabled: Boolean
+        get() = prefs.getBoolean("custom_template_long_chat_summary_enabled", false)
+        set(value) = prefs.edit()
+            .putBoolean("custom_template_long_chat_summary_enabled", value)
+            .apply()
     var customTemplateNeedDiscoverySchemaJson: String
         get() = prefs.getString("custom_template_need_discovery_schema_json", "") ?: ""
         set(value) = prefs.edit()

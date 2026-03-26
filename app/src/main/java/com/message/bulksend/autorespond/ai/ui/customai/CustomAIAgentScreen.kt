@@ -161,6 +161,9 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
     var continuousAutonomousEnabled by rememberSaveable {
         mutableStateOf(settingsManager.customTemplateContinuousAutonomousEnabled)
     }
+    var longChatSummaryEnabled by rememberSaveable {
+        mutableStateOf(settingsManager.customTemplateLongChatSummaryEnabled)
+    }
     var autonomousSilenceGapMinutesText by rememberSaveable {
         mutableStateOf(settingsManager.customTemplateAutonomousSilenceGapMinutes.toString())
     }
@@ -725,6 +728,7 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
                     autonomousMaxQueuePerUserText = settingsManager.customTemplateAutonomousMaxQueuePerUser.toString()
                     autonomousMaxGoalsPerRunText = settingsManager.customTemplateAutonomousMaxGoalsPerRun.toString()
                     conversationHistoryLimitText = settingsManager.customTemplateConversationHistoryLimit.toString()
+                    longChatSummaryEnabled = settingsManager.customTemplateLongChatSummaryEnabled
                     scope.launch {
                         syncSheetFolderOptions()
                         refreshGoogleConnectionSummary()
@@ -1085,6 +1089,11 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
                                 }
 
                                 refreshAutonomousStatus()
+                            },
+                            longChatSummaryEnabled = longChatSummaryEnabled,
+                            onLongChatSummaryEnabledChange = {
+                                longChatSummaryEnabled = it
+                                settingsManager.customTemplateLongChatSummaryEnabled = it
                             },
                             autonomousSilenceGapMinutesText = autonomousSilenceGapMinutesText,
                             onAutonomousSilenceGapMinutesTextChange = { raw ->

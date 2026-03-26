@@ -1,4 +1,4 @@
-﻿package com.message.bulksend.autorespond.ai.ui.customai
+package com.message.bulksend.autorespond.ai.ui.customai
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -78,6 +78,8 @@ internal fun CustomAIAgentToolsTab(
     onNativeToolCallingEnabledChange: (Boolean) -> Unit,
     continuousAutonomousEnabled: Boolean,
     onContinuousAutonomousEnabledChange: (Boolean) -> Unit,
+    longChatSummaryEnabled: Boolean,
+    onLongChatSummaryEnabledChange: (Boolean) -> Unit,
     autonomousSilenceGapMinutesText: String,
     onAutonomousSilenceGapMinutesTextChange: (String) -> Unit,
     autonomousMaxNudgesPerDayText: String,
@@ -116,6 +118,15 @@ internal fun CustomAIAgentToolsTab(
                 checked = continuousAutonomousEnabled,
                 accentColor = Color(0xFFF97316),
                 onCheckedChange = onContinuousAutonomousEnabledChange
+            ),
+            ToolCardModel(
+                key = "long-chat-summary",
+                icon = Icons.Default.AutoAwesome,
+                title = "Long Chat Summary Memory",
+                subtitle = "Summarize older chat context only when this switch is ON",
+                checked = longChatSummaryEnabled,
+                accentColor = Color(0xFF14B8A6),
+                onCheckedChange = onLongChatSummaryEnabledChange
             ),
             ToolCardModel(
                 key = "payment",
@@ -314,7 +325,7 @@ internal fun CustomAIAgentToolsTab(
                 ) {
                     Text("Autonomous Runtime Limits", color = Color.White, fontWeight = FontWeight.SemiBold)
                     Text(
-                        "Safety caps for loop size, retries, nudges and context window.",
+                        "Safety caps for loop size, retries, nudges, context window, and optional long-chat summary memory.",
                         color = Color(0xFFCBD5E1),
                         fontSize = 12.sp
                     )

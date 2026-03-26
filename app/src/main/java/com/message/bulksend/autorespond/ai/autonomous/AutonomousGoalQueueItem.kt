@@ -13,7 +13,8 @@ data class AutonomousGoalQueueItem(
     val createdAt: Long,
     val updatedAt: Long,
     val lastError: String = "",
-    val lastAgentMessage: String = ""
+    val lastAgentMessage: String = "",
+    val continuationState: AutonomousContinuationState = AutonomousContinuationState()
 ) {
     companion object {
         const val STATUS_QUEUED = "queued"
@@ -24,9 +25,18 @@ data class AutonomousGoalQueueItem(
     }
 }
 
+data class AutonomousContinuationState(
+    val roundsCompleted: Int = 0,
+    val summary: String = "",
+    val recentInbound: List<String> = emptyList(),
+    val recentOutbound: List<String> = emptyList(),
+    val recentToolActions: List<String> = emptyList(),
+    val lastDecision: String = "",
+    val updatedAt: Long = 0L
+)
+
 data class AutonomousRuntimeStatus(
     val queueSize: Int,
     val lastHeartbeatAt: Long,
     val lastError: String
 )
-
