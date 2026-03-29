@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -94,6 +95,23 @@ fun StatusBatchListScreen(
                         }
                     }
                 }
+            }
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDF4)),
+                shape = RoundedCornerShape(14.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFA7F3D0))
+            ) {
+                Text(
+                    text = "Tap any batch to preview it. Manual mode me 1 day me 1 batch hoga, aur Auto Daily se saare draft batches next days me line se schedule ho jayenge.",
+                    color = Color(0xFF065F46),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)
+                )
             }
 
             // Batch List
@@ -204,24 +222,37 @@ private fun BatchCard(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        when (batch.scheduleType) {
-                            ScheduleType.AUTO -> Icons.Default.Autorenew
-                            ScheduleType.MANUAL -> Icons.Default.Schedule
-                        },
-                        contentDescription = null,
-                        tint = Color(0xFF10B981),
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Text(
-                        text = when (batch.scheduleType) {
-                            ScheduleType.AUTO -> "Auto Daily"
-                            ScheduleType.MANUAL -> "Manual"
-                        },
-                        color = Color(0xFF111827),
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            text = "Batch #${batch.id}",
+                            color = Color(0xFF111827),
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                when (batch.scheduleType) {
+                                    ScheduleType.AUTO -> Icons.Default.Autorenew
+                                    ScheduleType.MANUAL -> Icons.Default.Schedule
+                                },
+                                contentDescription = null,
+                                tint = Color(0xFF10B981),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = when (batch.scheduleType) {
+                                    ScheduleType.AUTO -> "Auto daily queue"
+                                    ScheduleType.MANUAL -> "One-time batch"
+                                },
+                                color = Color(0xFF4B5563),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
                 }
                 
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -261,6 +292,12 @@ private fun BatchCard(
                     fontWeight = FontWeight.Medium
                 )
             }
+
+            Text(
+                text = "Tap card to preview media and schedule details",
+                color = Color(0xFF6B7280),
+                fontSize = 12.sp
+            )
             
             // Schedule Info
             if (batch.time != null) {
@@ -343,7 +380,7 @@ private fun BatchCard(
                         elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
                     ) {
                         Icon(
-                            Icons.Default.Send,
+                            Icons.AutoMirrored.Filled.Send,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp)
                         )
@@ -367,7 +404,15 @@ private fun BatchCard(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(Modifier.width(6.dp))
-                        Text("Schedule", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Text(
+                            if (batch.startDate != null && batch.time != null && batch.amPm != null) {
+                                "Schedule Now"
+                            } else {
+                                "Set Schedule"
+                            },
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
                     }
                 }
             } else if (batch.status == BatchStatus.SCHEDULED) {
@@ -386,7 +431,7 @@ private fun BatchCard(
                         elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
                     ) {
                         Icon(
-                            Icons.Default.Send,
+                            Icons.AutoMirrored.Filled.Send,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp)
                         )

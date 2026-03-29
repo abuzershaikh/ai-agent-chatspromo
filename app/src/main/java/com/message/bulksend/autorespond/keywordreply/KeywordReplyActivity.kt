@@ -118,9 +118,8 @@ fun KeywordReplyScreen(
                         val trimmedKeyword = incomingKeyword.trim()
                         val trimmedReply = replyMessage.trim()
                         if (trimmedKeyword.isNotBlank() && (trimmedReply.isNotBlank() || selectedReplyOption == "menu")) {
-                            // Check notification permission and auto respond enabled
+                            // Check notification permission before enabling keyword reply
                             val hasPermission = autoRespondManager.isNotificationPermissionGranted()
-                            val isAutoRespondEnabled = autoRespondManager.isAutoRespondEnabled()
                             val isEditing = editingReplyId != null
 
                             val keywordWordCount = trimmedKeyword.split("\\s+".toRegex()).size.coerceAtLeast(1)
@@ -154,7 +153,7 @@ fun KeywordReplyScreen(
                             editingCreatedAt = null
                             editingIsEnabled = true
                             
-                            if (!hasPermission || !isAutoRespondEnabled) {
+                            if (!hasPermission) {
                                 showEnableDialog = true
                                 saveButtonText = if (isEditing) "Updated" else "Saved"
                             } else {
@@ -179,18 +178,14 @@ fun KeywordReplyScreen(
         },
         containerColor = Color(0xFF0f0c29)
     ) { padding ->
-        // Enable Auto Respond Dialog
+        // Notification Permission Dialog
         if (showEnableDialog) {
             EnableAutoRespondDialog(
                 autoRespondManager = autoRespondManager,
                 onDismiss = { showEnableDialog = false },
                 onGoToEnable = {
                     showEnableDialog = false
-                    // Navigate to AutoRespondActivity Home tab
-                    val intent = android.content.Intent(context, com.message.bulksend.autorespond.AutoRespondActivity::class.java)
-                    intent.putExtra("navigate_to_autorespond_home", true)
-                    intent.flags = android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
-                    context.startActivity(intent)
+                    autoRespondManager.openNotificationSettings()
                 }
             )
         }
@@ -524,7 +519,7 @@ fun PreviewSection(incomingKeyword: String, replyMessage: String, isMenuReply: B
 }
 
 /**
- * Dialog to prompt user to enable Auto Respond
+ * Dialog to prompt user for notification access
  */
 @Composable
 fun EnableAutoRespondDialog(
@@ -533,13 +528,11 @@ fun EnableAutoRespondDialog(
     onGoToEnable: () -> Unit
 ) {
     val hasPermission = autoRespondManager.isNotificationPermissionGranted()
-    val isAutoRespondEnabled = autoRespondManager.isAutoRespondEnabled()
     
-    val message = when {
-        !hasPermission && !isAutoRespondEnabled -> "Notification access permission is required and Auto Respond needs to be enabled for keyword replies to work."
-        !hasPermission -> "Notification access permission is required for keyword replies to work."
-        !isAutoRespondEnabled -> "Auto Respond needs to be enabled for keyword replies to work."
-        else -> ""
+    val message = if (!hasPermission) {
+        "Notification access permission is required for keyword replies to work."
+    } else {
+        ""
     }
     
     AlertDialog(
@@ -566,7 +559,7 @@ fun EnableAutoRespondDialog(
         },
         title = {
             Text(
-                "Enable Auto Respond",
+                "Notification Access Required",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
@@ -587,7 +580,7 @@ fun EnableAutoRespondDialog(
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00D4FF)),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Go to Enable", fontWeight = FontWeight.Bold)
+                Text("Open Settings", fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {

@@ -67,6 +67,7 @@ import com.razorpay.Checkout
 import com.razorpay.PaymentResultListener
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -614,22 +615,39 @@ private suspend fun createAIAgentOrder(planType: String): AIAgentPlanOrder =
                                 .addHeader("Content-Type", "application/json")
                                 .build()
 
-                PrepackActivity.httpClient.newCall(request).execute().use { response ->
-                        val payload = response.body?.string() ?: throw Exception("Empty response.")
-                        if (!response.isSuccessful) {
-                                throw Exception("HTTP ${response.code}")
-                        }
+                val maxAttempts = 3
+                var lastError: Exception? = null
 
-                        val json = JSONObject(payload)
-                        AIAgentPlanOrder(
-                                success = json.getBoolean("success"),
-                                orderId = json.getString("orderId"),
-                                amount = json.getInt("amount"),
-                                currency = json.getString("currency"),
-                                keyId = json.getString("keyId"),
-                                planName = json.getString("planName")
-                        )
+                repeat(maxAttempts) { attemptIndex ->
+                        PrepackActivity.httpClient.newCall(request).execute().use { response ->
+                                val payload =
+                                        response.body?.string() ?: throw Exception("Empty response.")
+                                Log.d(
+                                        "PrePackActivity",
+                                        "createAIAgentOrder response=${response.code} attempt=${attemptIndex + 1}/$maxAttempts body=$payload"
+                                )
+
+                                if (response.isSuccessful) {
+                                        val json = JSONObject(payload)
+                                        return@withContext AIAgentPlanOrder(
+                                                success = json.getBoolean("success"),
+                                                orderId = json.getString("orderId"),
+                                                amount = json.getInt("amount"),
+                                                currency = json.getString("currency"),
+                                                keyId = json.getString("keyId"),
+                                                planName = json.getString("planName")
+                                        )
+                                }
+
+                                lastError = Exception("HTTP ${response.code} - $payload")
+                                if (response.code == 503 && attemptIndex < maxAttempts - 1) {
+                                        delay(1500L * (attemptIndex + 1))
+                                        return@use
+                                }
+                        }
                 }
+
+                throw lastError ?: Exception("Unknown AI order creation error.")
         }
 
 @OptIn(ExperimentalMaterial3Api::class)

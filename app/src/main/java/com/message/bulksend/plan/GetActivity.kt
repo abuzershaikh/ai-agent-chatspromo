@@ -23,6 +23,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -570,26 +571,37 @@ suspend fun createOrder(planType: String): OrderResponse = withContext(Dispatche
         
         Log.d(GetActivity.TAG, "Creating order for plan: $planType")
         
-        GetActivity.httpClient.newCall(request).execute().use { response ->
-            val responseBody = response.body?.string() ?: throw Exception("Empty response")
-            
-            Log.d(GetActivity.TAG, "Response code: ${response.code}")
-            Log.d(GetActivity.TAG, "Response body: $responseBody")
-            
-            if (!response.isSuccessful) {
-                throw Exception("HTTP Error: ${response.code} - $responseBody")
+        val maxAttempts = 3
+        var lastError: Exception? = null
+
+        repeat(maxAttempts) { attemptIndex ->
+            GetActivity.httpClient.newCall(request).execute().use { response ->
+                val responseBody = response.body?.string() ?: throw Exception("Empty response")
+
+                Log.d(GetActivity.TAG, "Response code: ${response.code} (attempt ${attemptIndex + 1}/$maxAttempts)")
+                Log.d(GetActivity.TAG, "Response body: $responseBody")
+
+                if (response.isSuccessful) {
+                    val json = JSONObject(responseBody)
+                    return@withContext OrderResponse(
+                        success = json.getBoolean("success"),
+                        orderId = json.getString("orderId"),
+                        amount = json.getInt("amount"),
+                        currency = json.getString("currency"),
+                        keyId = json.getString("keyId"),
+                        planName = json.getString("planName")
+                    )
+                }
+
+                lastError = Exception("HTTP Error: ${response.code} - $responseBody")
+                if (response.code == 503 && attemptIndex < maxAttempts - 1) {
+                    delay(1500L * (attemptIndex + 1))
+                    return@use
+                }
             }
-            
-            val json = JSONObject(responseBody)
-            OrderResponse(
-                success = json.getBoolean("success"),
-                orderId = json.getString("orderId"),
-                amount = json.getInt("amount"),
-                currency = json.getString("currency"),
-                keyId = json.getString("keyId"),
-                planName = json.getString("planName")
-            )
         }
+
+        throw lastError ?: Exception("Unknown order creation error")
     } catch (e: Exception) {
         Log.e(GetActivity.TAG, "Error creating order", e)
         throw e

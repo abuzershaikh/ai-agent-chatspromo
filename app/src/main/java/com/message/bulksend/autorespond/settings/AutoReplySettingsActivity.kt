@@ -1,6 +1,5 @@
 package com.message.bulksend.autorespond.settings
 
-import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -29,18 +28,14 @@ class AutoReplySettingsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val autoRespondManager = AutoRespondManager(this)
         
         setContent {
             BulksendTestTheme {
                 AutoReplySettingsScreen(
                     onBackPressed = { finish() },
-                    onNavigateToHome = {
-                        // Navigate to AutoRespondActivity with Home tab selected
-                        val intent = Intent(this, com.message.bulksend.autorespond.AutoRespondActivity::class.java)
-                        intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                        intent.putExtra("navigate_to_autorespond_home", true)
-                        startActivity(intent)
-                        finish()
+                    onOpenNotificationSettings = {
+                        autoRespondManager.openNotificationSettings()
                     }
                 )
             }
@@ -52,7 +47,7 @@ class AutoReplySettingsActivity : ComponentActivity() {
 @Composable
 fun AutoReplySettingsScreen(
     onBackPressed: () -> Unit,
-    onNavigateToHome: () -> Unit = {}
+    onOpenNotificationSettings: () -> Unit = {}
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val settingsManager = remember { AutoReplySettingsManager(context) }
@@ -78,9 +73,9 @@ fun AutoReplySettingsScreen(
     if (showPermissionDialog) {
         PermissionRequiredDialog(
             onDismiss = { showPermissionDialog = false },
-            onGoToHome = {
+            onOpenSettings = {
                 showPermissionDialog = false
-                onNavigateToHome()
+                onOpenNotificationSettings()
             }
         )
     }
@@ -176,9 +171,8 @@ fun AutoReplySettingsScreen(
             ) {
                 if (!currentValue) {
                     val hasNotificationPermission = autoRespondManager.isNotificationPermissionGranted()
-                    val isAutoRespondEnabled = autoRespondManager.isAutoRespondEnabled()
                     
-                    if (!hasNotificationPermission || !isAutoRespondEnabled) {
+                    if (!hasNotificationPermission) {
                         showPermissionDialog = true
                     } else {
                         onEnable()
@@ -986,7 +980,7 @@ fun WhatsAppInfoDialog(onDismiss: () -> Unit) {
 @Composable
 fun PermissionRequiredDialog(
     onDismiss: () -> Unit,
-    onGoToHome: () -> Unit
+    onOpenSettings: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1023,7 +1017,7 @@ fun PermissionRequiredDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    "To enable auto-reply settings, you need to:",
+                    "To enable auto-reply settings, allow Notification Access permission:",
                     fontSize = 14.sp,
                     color = Color(0xFF94A3B8)
                 )
@@ -1048,30 +1042,10 @@ fun PermissionRequiredDialog(
                     )
                 }
                 
-                // Step 2
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .background(Color(0xFF00D4FF).copy(alpha = 0.2f), RoundedCornerShape(8.dp)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("2", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF00D4FF))
-                    }
-                    Text(
-                        "Enable Auto Respond Service",
-                        fontSize = 13.sp,
-                        color = Color.White
-                    )
-                }
-                
                 Spacer(modifier = Modifier.height(8.dp))
                 
                 Text(
-                    "You will be redirected to Auto Respond Home screen where you can enable these settings.",
+                    "You will be redirected to Notification Access settings.",
                     fontSize = 12.sp,
                     color = Color(0xFF64748B)
                 )
@@ -1079,7 +1053,7 @@ fun PermissionRequiredDialog(
         },
         confirmButton = {
             Button(
-                onClick = onGoToHome,
+                onClick = onOpenSettings,
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00D4FF)),
                 shape = RoundedCornerShape(12.dp)
             ) {
@@ -1089,7 +1063,7 @@ fun PermissionRequiredDialog(
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Go to Home", fontWeight = FontWeight.Bold)
+                Text("Open Settings", fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {

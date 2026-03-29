@@ -43,18 +43,20 @@ class AutoRespondManager(private val context: Context) {
     }
 
     /**
-     * Save auto respond enabled state
+     * Legacy toggle setter kept for backward compatibility.
+     * Auto-reply now depends on notification access instead of a separate enable switch.
      */
     fun setAutoRespondEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_AUTO_RESPOND_ENABLED, enabled).apply()
-        Log.d(TAG, "Auto respond ${if (enabled) "enabled" else "disabled"}")
+        Log.d(TAG, "Stored legacy auto respond flag: ${if (enabled) "enabled" else "disabled"}")
     }
 
     /**
-     * Get auto respond enabled state
+     * Auto-reply is considered enabled when notification listener permission is granted.
+     * This removes the extra in-app enable step.
      */
     fun isAutoRespondEnabled(): Boolean {
-        return prefs.getBoolean(KEY_AUTO_RESPOND_ENABLED, false)
+        return isNotificationPermissionGranted()
     }
 
     /**

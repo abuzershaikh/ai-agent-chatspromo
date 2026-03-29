@@ -6,6 +6,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -22,6 +23,8 @@ import java.util.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScheduleSettingsScreen(
+    batchTitle: String,
+    mediaCount: Int,
     scheduleType: ScheduleType,
     onScheduleTypeChanged: (ScheduleType) -> Unit,
     startDate: Long?,
@@ -40,6 +43,7 @@ fun ScheduleSettingsScreen(
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
     var showReminderDialog by remember { mutableStateOf(false) }
+    val isDailyRepeat = repeatDaily || scheduleType == ScheduleType.AUTO
     
     Column(
         modifier = Modifier
@@ -64,14 +68,33 @@ fun ScheduleSettingsScreen(
                     .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Schedule Settings",
+                        color = Color.White,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color.White
+                        )
+                    }
+                }
                 Text(
-                    text = "Schedule Settings",
+                    text = batchTitle,
                     color = Color.White,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    text = "Configure when to post this batch",
+                    text = "Configure when to post this batch. $mediaCount media item${if (mediaCount == 1) "" else "s"} selected.",
                     color = Color.White.copy(alpha = 0.9f),
                     fontSize = 14.sp
                 )
@@ -106,8 +129,8 @@ fun ScheduleSettingsScreen(
                 // Auto Schedule Option
                 ScheduleTypeCard(
                     icon = Icons.Default.Autorenew,
-                    title = "Auto Daily Batch",
-                    description = "Post automatically every day at the same time",
+                    title = "Auto Daily Series",
+                    description = "Schedule this batch and all draft batches one by one on next days",
                     isSelected = scheduleType == ScheduleType.AUTO,
                     onClick = { onScheduleTypeChanged(ScheduleType.AUTO) }
                 )
@@ -115,8 +138,8 @@ fun ScheduleSettingsScreen(
                 // Manual Schedule Option
                 ScheduleTypeCard(
                     icon = Icons.Default.Schedule,
-                    title = "Manual Schedule",
-                    description = "Set specific date and time for this batch",
+                    title = "One-Time Schedule",
+                    description = "Best for 30 days = 30 different batches",
                     isSelected = scheduleType == ScheduleType.MANUAL,
                     onClick = { onScheduleTypeChanged(ScheduleType.MANUAL) }
                 )
@@ -172,52 +195,45 @@ fun ScheduleSettingsScreen(
                     onClick = { showTimePicker = true }
                 )
                 
-                // Repeat Daily (Only for Auto mode)
-                if (scheduleType == ScheduleType.AUTO) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        shape = RoundedCornerShape(12.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE5E7EB))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isDailyRepeat) Color(0xFFEEF2FF) else Color(0xFFF0FDF4)
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (isDailyRepeat) Color(0xFFC7D2FE) else Color(0xFFA7F3D0)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.Top
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    Icons.Default.Repeat,
-                                    contentDescription = null,
-                                    tint = Color(0xFF10B981),
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                Column {
-                                    Text(
-                                        text = "Repeat Daily",
-                                        color = Color(0xFF111827),
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                    Text(
-                                        text = "Post every day at this time",
-                                        color = Color(0xFF6B7280),
-                                        fontSize = 13.sp
-                                    )
-                                }
-                            }
-                            Switch(
-                                checked = repeatDaily,
-                                onCheckedChange = onRepeatDailyChanged,
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.White,
-                                    checkedTrackColor = Color(0xFF10B981)
-                                )
+                        Icon(
+                            imageVector = if (isDailyRepeat) Icons.Default.Repeat else Icons.Default.TipsAndUpdates,
+                            contentDescription = null,
+                            tint = if (isDailyRepeat) Color(0xFF4338CA) else Color(0xFF059669),
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = if (isDailyRepeat) "Daily repeat enabled" else "Best option for 30-day planning",
+                                color = if (isDailyRepeat) Color(0xFF312E81) else Color(0xFF065F46),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = if (isDailyRepeat) {
+                                    "This selected batch se start karke baaki draft batches bhi next-next days par automatically schedule honge. 1 day me 1 batch jayega."
+                                } else {
+                                    "Sirf ye batch selected date par schedule hoga. Same day par doosra batch allowed nahi hoga."
+                                },
+                                color = if (isDailyRepeat) Color(0xFF3730A3) else Color(0xFF047857),
+                                fontSize = 13.sp
                             )
                         }
                     }
@@ -239,35 +255,32 @@ fun ScheduleSettingsScreen(
         
         Spacer(modifier = Modifier.height(12.dp))
         
-        // Warning for Manual Mode
-        if (scheduleType == ScheduleType.MANUAL) {
-            Card(
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFBEB)),
+            shape = RoundedCornerShape(12.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFDE68A))
+        ) {
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
-                shape = RoundedCornerShape(12.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFDE68A))
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Warning,
-                        contentDescription = null,
-                        tint = Color(0xFFF59E0B),
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Text(
-                        text = "Manual mode will apply to all batches. Mix mode is not allowed.",
-                        color = Color(0xFF92400E),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
+                Icon(
+                    Icons.Default.Info,
+                    contentDescription = null,
+                    tint = Color(0xFFD97706),
+                    modifier = Modifier.size(22.dp)
+                )
+                Text(
+                    text = "Draft batches are not sent automatically. They will run only after you tap Save & Schedule for that specific batch.",
+                    color = Color(0xFF92400E),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
             }
         }
         
@@ -301,7 +314,7 @@ fun ScheduleSettingsScreen(
                 enabled = startDate != null && time != null && amPm != null,
                 elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
             ) {
-                Text("Save Batch", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text("Save & Schedule", fontWeight = FontWeight.Bold, fontSize = 16.sp)
             }
         }
         

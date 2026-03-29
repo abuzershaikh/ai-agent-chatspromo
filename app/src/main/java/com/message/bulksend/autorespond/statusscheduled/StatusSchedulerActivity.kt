@@ -52,11 +52,13 @@ import com.message.bulksend.autorespond.database.MessageDatabase
 import com.message.bulksend.autorespond.statusscheduled.database.StatusBatchRepository
 import com.message.bulksend.autorespond.statusscheduled.models.MediaItem
 import com.message.bulksend.autorespond.statusscheduled.models.MediaType
+import com.message.bulksend.autorespond.statusscheduled.models.BatchStatus
 import com.message.bulksend.autorespond.statusscheduled.models.ScheduleType
 import com.message.bulksend.autorespond.statusscheduled.models.StatusBatch
 import com.message.bulksend.autorespond.statusscheduled.screens.MediaPickerScreen
 import com.message.bulksend.autorespond.statusscheduled.screens.ScheduleSettingsScreen
 import com.message.bulksend.autorespond.statusscheduled.screens.StatusBatchListScreen
+import com.message.bulksend.autorespond.statusscheduled.screens.StatusBatchPreviewScreen
 import com.message.bulksend.components.AlarmPermissionDialog
 import com.message.bulksend.plan.PrepackActivity
 import com.message.bulksend.ui.theme.BulksendTestTheme
@@ -100,7 +102,8 @@ class StatusSchedulerActivity : ComponentActivity() {
 enum class SchedulerScreen {
     BATCH_LIST,
     MEDIA_PICKER,
-    SCHEDULE_SETTINGS
+    SCHEDULE_SETTINGS,
+    BATCH_PREVIEW
 }
 
 private const val STATUS_SCHEDULER_TRIAL_PREFS = "status_scheduler_trial_prefs"
@@ -158,15 +161,20 @@ fun StatusSchedulerApp(
     var showAccessibilityDialog by remember { mutableStateOf(false) }
 
     var selectedMedia by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
-    var scheduleType by remember { mutableStateOf(ScheduleType.AUTO) }
+    var scheduleType by remember { mutableStateOf(ScheduleType.MANUAL) }
     var startDate by remember { mutableStateOf<Long?>(null) }
     var time by remember { mutableStateOf<String?>(null) }
     var amPm by remember { mutableStateOf<String?>(null) }
     var repeatDaily by remember { mutableStateOf(false) }
     var reminderMinutes by remember { mutableStateOf<Int?>(null) }
+    var previewBatchId by remember { mutableStateOf<Long?>(null) }
+    var scheduleTargetBatchId by remember { mutableStateOf<Long?>(null) }
+    var scheduleBackTarget by remember { mutableStateOf(SchedulerScreen.BATCH_LIST) }
 
     val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
+    val currentPreviewBatch = batches.firstOrNull { it.id == previewBatchId }
+    val scheduleTargetBatch = batches.firstOrNull { it.id == scheduleTargetBatchId }
 
     fun canUseStatusScheduler(): Boolean {
         return isStatusSchedulerPremiumActive(context) || hasActiveStatusSchedulerTrial(context)
@@ -176,11 +184,83 @@ fun StatusSchedulerApp(
         return isAccessibilityServiceEnabled(context)
     }
 
+    fun showAccessRequiredToast() {
+        Toast.makeText(
+            context,
+            "Enable Accessibility permission to run status posting.",
+            Toast.LENGTH_LONG
+        ).show()
+    }
+
+    fun resetNewBatchComposer() {
+        selectedMedia = emptyList()
+        scheduleType = ScheduleType.MANUAL
+        startDate = null
+        time = null
+        amPm = null
+        repeatDaily = false
+        reminderMinutes = null
+        scheduleTargetBatchId = null
+        scheduleBackTarget = SchedulerScreen.BATCH_LIST
+    }
+
+    fun openCreateBatchFlow() {
+        resetNewBatchComposer()
+        currentScreen = SchedulerScreen.MEDIA_PICKER
+    }
+
+    fun openScheduleEditor(batch: StatusBatch, returnScreen: SchedulerScreen) {
+        scheduleTargetBatchId = batch.id
+        scheduleType = batch.scheduleType
+        startDate = batch.startDate
+        time = batch.time
+        amPm = batch.amPm
+        repeatDaily = false
+        reminderMinutes = batch.reminderMinutes
+        scheduleBackTarget = returnScreen
+        previewBatchId = batch.id
+        currentScreen = SchedulerScreen.SCHEDULE_SETTINGS
+    }
+
+    fun postBatchNow(batch: StatusBatch) {
+        scope.launch {
+            if (!hasAccessibilityPermission()) {
+                showAccessibilityDialog = true
+                showAccessRequiredToast()
+                return@launch
+            }
+
+            previewBatchId = batch.id
+            StatusBatchExecutionService.startForBatch(
+                context = context,
+                batchId = batch.id,
+                source = StatusBatchExecutionService.SOURCE_POST_NOW
+            )
+            Toast.makeText(context, "Posting batch now...", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     LaunchedEffect(Unit) {
         batchManager.restoreScheduledBatches()
         repository.getAllBatches().collectLatest { loadedBatches ->
             batches = loadedBatches
             canAddMore = repository.canAddMoreBatches()
+
+            if (previewBatchId != null && loadedBatches.none { it.id == previewBatchId }) {
+                previewBatchId = null
+                if (currentScreen == SchedulerScreen.BATCH_PREVIEW) {
+                    currentScreen = SchedulerScreen.BATCH_LIST
+                }
+            }
+
+            if (scheduleTargetBatchId != null && loadedBatches.none { it.id == scheduleTargetBatchId }) {
+                scheduleTargetBatchId = null
+                if (currentScreen == SchedulerScreen.SCHEDULE_SETTINGS &&
+                    scheduleBackTarget != SchedulerScreen.MEDIA_PICKER
+                ) {
+                    currentScreen = SchedulerScreen.BATCH_LIST
+                }
+            }
         }
     }
 
@@ -199,79 +279,21 @@ fun StatusSchedulerApp(
             StatusBatchListScreen(
                 batches = batches,
                 onBatchClick = { batch ->
-                    Toast.makeText(context, "Edit batch: ${batch.id}", Toast.LENGTH_SHORT).show()
+                    previewBatchId = batch.id
+                    currentScreen = SchedulerScreen.BATCH_PREVIEW
                 },
                 onDeleteBatch = { batch ->
                     scope.launch {
                         batchManager.deleteBatch(batch)
+                        if (previewBatchId == batch.id) {
+                            previewBatchId = null
+                        }
                         Toast.makeText(context, "Batch deleted", Toast.LENGTH_SHORT).show()
                     }
                 },
-                onPostNow = { batch ->
-                    scope.launch {
-                        if (!hasAccessibilityPermission()) {
-                            showAccessibilityDialog = true
-                            Toast.makeText(
-                                context,
-                                "Accessibility permission required. Please enable it in Settings.",
-                                Toast.LENGTH_LONG
-                            ).show()
-                            return@launch
-                        }
-                        StatusBatchExecutionService.startForBatch(
-                            context = context,
-                            batchId = batch.id,
-                            source = StatusBatchExecutionService.SOURCE_POST_NOW
-                        )
-                        Toast.makeText(context, "Posting batch now...", Toast.LENGTH_SHORT).show()
-                    }
-                },
+                onPostNow = ::postBatchNow,
                 onScheduleBatch = { batch ->
-                    scope.launch {
-                        if (!hasAccessibilityPermission()) {
-                            showAccessibilityDialog = true
-                            Toast.makeText(
-                                context,
-                                "Enable Accessibility permission to run scheduled status posting.",
-                                Toast.LENGTH_LONG
-                            ).show()
-                            return@launch
-                        }
-
-                        if (!batchManager.canScheduleExactAlarms()) {
-                            showAlarmPermissionDialog = true
-                            Toast.makeText(
-                                context,
-                                "Enable Exact Alarm permission to schedule batches.",
-                                Toast.LENGTH_LONG
-                            ).show()
-                            return@launch
-                        }
-
-                        val success = batchManager.scheduleBatch(batch.id)
-                        if (success) {
-                            Toast.makeText(
-                                context,
-                                "Batch scheduled successfully",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        } else {
-                            if (!batchManager.canScheduleExactAlarms()) {
-                                showAlarmPermissionDialog = true
-                                Toast.makeText(
-                                    context,
-                                    "Exact Alarm permission is required for scheduling.",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                            } else {
-                                Toast.makeText(
-                                    context,
-                                    "Failed to schedule batch. Please verify date and time.",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                            }
-                        }
-                    }
+                    openScheduleEditor(batch, SchedulerScreen.BATCH_LIST)
                 },
                 onCancelSchedule = { batch ->
                     scope.launch {
@@ -294,18 +316,8 @@ fun StatusSchedulerApp(
                         } else {
                             showTrialDialog = true
                         }
-                        return@StatusBatchListScreen
-                    }
-
-                    if (canAddMore) {
-                        selectedMedia = emptyList()
-                        scheduleType = ScheduleType.AUTO
-                        startDate = null
-                        time = null
-                        amPm = null
-                        repeatDaily = false
-                        reminderMinutes = null
-                        currentScreen = SchedulerScreen.MEDIA_PICKER
+                    } else if (canAddMore) {
+                        openCreateBatchFlow()
                     } else {
                         Toast.makeText(
                             context,
@@ -352,8 +364,50 @@ fun StatusSchedulerApp(
                         if (it == media) it.copy(delayMinutes = delay) else it
                     }
                 },
-                onNext = {
+                onBack = {
+                    currentScreen = SchedulerScreen.BATCH_LIST
+                },
+                onSaveDraft = {
+                    if (selectedMedia.isEmpty()) {
+                        Toast.makeText(
+                            context,
+                            "Please add at least one media item",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    } else {
+                        scope.launch {
+                            if (!canUseStatusScheduler()) {
+                                showUpgradeDialog = true
+                                return@launch
+                            }
+
+                            val batchId = batchManager.createBatch(
+                                mediaList = selectedMedia,
+                                scheduleType = ScheduleType.MANUAL
+                            )
+
+                            if (batchId != null) {
+                                previewBatchId = batchId
+                                resetNewBatchComposer()
+                                currentScreen = SchedulerScreen.BATCH_LIST
+                                Toast.makeText(
+                                    context,
+                                    "Draft saved. You can schedule it later.",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            } else {
+                                Toast.makeText(
+                                    context,
+                                    "Failed to save draft batch",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                    }
+                },
+                onScheduleNext = {
                     if (selectedMedia.isNotEmpty()) {
+                        scheduleBackTarget = SchedulerScreen.MEDIA_PICKER
                         currentScreen = SchedulerScreen.SCHEDULE_SETTINGS
                     } else {
                         Toast.makeText(
@@ -368,8 +422,13 @@ fun StatusSchedulerApp(
 
         SchedulerScreen.SCHEDULE_SETTINGS -> {
             ScheduleSettingsScreen(
+                batchTitle = scheduleTargetBatch?.let { "Batch #${it.id}" } ?: "New Batch",
+                mediaCount = scheduleTargetBatch?.mediaList?.size ?: selectedMedia.size,
                 scheduleType = scheduleType,
-                onScheduleTypeChanged = { scheduleType = it },
+                onScheduleTypeChanged = {
+                    scheduleType = it
+                    repeatDaily = false
+                },
                 startDate = startDate,
                 onStartDateChanged = { startDate = it },
                 time = time,
@@ -387,36 +446,123 @@ fun StatusSchedulerApp(
                             return@launch
                         }
 
-                        val batchId = batchManager.createBatch(
-                            mediaList = selectedMedia,
-                            scheduleType = scheduleType,
-                            startDate = startDate,
-                            time = time,
-                            amPm = amPm,
-                            repeatDaily = repeatDaily,
-                            reminderMinutes = reminderMinutes
-                        )
+                        if (!hasAccessibilityPermission()) {
+                            showAccessibilityDialog = true
+                            showAccessRequiredToast()
+                            return@launch
+                        }
 
-                        if (batchId != null) {
+                        if (!batchManager.canScheduleExactAlarms()) {
+                            showAlarmPermissionDialog = true
                             Toast.makeText(
                                 context,
-                                "Batch saved successfully",
-                                Toast.LENGTH_SHORT
+                                "Enable Exact Alarm permission to schedule batches.",
+                                Toast.LENGTH_LONG
                             ).show()
-                            currentScreen = SchedulerScreen.BATCH_LIST
+                            return@launch
+                        }
+
+                        val normalizedRepeatDaily = false
+                        val batchId = if (scheduleTargetBatch != null) {
+                            val updatedBatch = scheduleTargetBatch.copy(
+                                scheduleType = scheduleType,
+                                startDate = startDate,
+                                time = time,
+                                amPm = amPm,
+                                repeatDaily = normalizedRepeatDaily,
+                                reminderMinutes = reminderMinutes,
+                                status = BatchStatus.DRAFT,
+                                scheduledAt = null
+                            )
+                            batchManager.updateBatch(updatedBatch)
+                            updatedBatch.id
                         } else {
+                            batchManager.createBatch(
+                                mediaList = selectedMedia,
+                                scheduleType = scheduleType,
+                                startDate = startDate,
+                                time = time,
+                                amPm = amPm,
+                                repeatDaily = normalizedRepeatDaily,
+                                reminderMinutes = reminderMinutes
+                            )
+                        }
+
+                        if (batchId == null) {
                             Toast.makeText(
                                 context,
-                                "Failed to create batch",
+                                "Failed to prepare batch for scheduling",
                                 Toast.LENGTH_SHORT
                             ).show()
+                            return@launch
+                        }
+
+                        val result = batchManager.scheduleBatchWithResult(batchId)
+                        if (result.success) {
+                            previewBatchId = batchId
+                            scheduleTargetBatchId = null
+                            selectedMedia = emptyList()
+                            currentScreen = SchedulerScreen.BATCH_PREVIEW
+                            Toast.makeText(
+                                context,
+                                result.message,
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        } else {
+                            if (!batchManager.canScheduleExactAlarms()) {
+                                showAlarmPermissionDialog = true
+                                Toast.makeText(
+                                    context,
+                                    "Exact Alarm permission is required for scheduling.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            } else {
+                                Toast.makeText(
+                                    context,
+                                    result.message,
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
                         }
                     }
                 },
                 onBack = {
-                    currentScreen = SchedulerScreen.MEDIA_PICKER
+                    currentScreen = scheduleBackTarget
                 }
             )
+        }
+
+        SchedulerScreen.BATCH_PREVIEW -> {
+            currentPreviewBatch?.let { batch ->
+                StatusBatchPreviewScreen(
+                    batch = batch,
+                    onBack = { currentScreen = SchedulerScreen.BATCH_LIST },
+                    onSchedule = { openScheduleEditor(batch, SchedulerScreen.BATCH_PREVIEW) },
+                    onPostNow = { postBatchNow(batch) },
+                    onCancelSchedule = {
+                        scope.launch {
+                            val success = batchManager.cancelBatchSchedule(batch.id)
+                            if (success) {
+                                Toast.makeText(context, "Schedule cancelled", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(
+                                    context,
+                                    "Failed to cancel schedule",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                    },
+                    onDelete = {
+                        scope.launch {
+                            batchManager.deleteBatch(batch)
+                            previewBatchId = null
+                            currentScreen = SchedulerScreen.BATCH_LIST
+                            Toast.makeText(context, "Batch deleted", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                )
+            }
         }
     }
 

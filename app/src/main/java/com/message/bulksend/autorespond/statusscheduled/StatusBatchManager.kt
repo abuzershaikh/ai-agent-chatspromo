@@ -17,6 +17,12 @@ import java.util.Calendar
 import java.util.TimeZone
 import java.util.UUID
 
+data class ScheduleBatchResult(
+    val success: Boolean,
+    val scheduledCount: Int = 0,
+    val message: String
+)
+
 class StatusBatchManager(
     private val context: Context,
     private val repository: StatusBatchRepository
@@ -163,38 +169,184 @@ class StatusBatchManager(
         repository.deleteBatch(batch)
     }
     
-    // Schedule batch
-    suspend fun scheduleBatch(batchId: Long): Boolean {
+    suspend fun scheduleBatchWithResult(batchId: Long): ScheduleBatchResult {
         Log.d(TAG, "scheduleBatch requested batchId=$batchId")
         val batch = repository.getBatchById(batchId) ?: run {
             Log.e(TAG, "scheduleBatch failed: batch not found batchId=$batchId")
-            return false
+            return ScheduleBatchResult(
+                success = false,
+                message = "Batch not found."
+            )
         }
         Log.d(
             TAG,
             "scheduleBatch batchId=$batchId status=${batch.status} type=${batch.scheduleType} " +
                 "startDate=${formatMillis(batch.startDate)} time=${batch.time} amPm=${batch.amPm} repeatDaily=${batch.repeatDaily}"
         )
-        val triggerAt = calculateNextTriggerTime(batch) ?: run {
-            Log.e(TAG, "Cannot schedule batch $batchId: invalid or past schedule")
-            return false
+
+        return if (batch.scheduleType == ScheduleType.AUTO) {
+            scheduleAutoDailySeries(batch)
+        } else {
+            scheduleSingleBatch(batch)
         }
-        Log.d(TAG, "scheduleBatch computed triggerAt=${formatMillis(triggerAt)} batchId=$batchId")
+    }
+
+    suspend fun scheduleBatch(batchId: Long): Boolean {
+        return scheduleBatchWithResult(batchId).success
+    }
+
+    private suspend fun scheduleSingleBatch(batch: StatusBatch): ScheduleBatchResult {
+        val triggerAt = calculateNextTriggerTime(batch) ?: run {
+            Log.e(TAG, "Cannot schedule batch ${batch.id}: invalid or past schedule")
+            return ScheduleBatchResult(
+                success = false,
+                message = "Please choose a future date and time."
+            )
+        }
+        Log.d(TAG, "scheduleSingleBatch computed triggerAt=${formatMillis(triggerAt)} batchId=${batch.id}")
+
+        val batchDay = batch.startDate?.let(::normalizeDateOnly) ?: normalizeDateOnly(triggerAt)
+        val conflictingBatch = repository
+            .getBatchesByStatus(BatchStatus.SCHEDULED)
+            .firstOrNull { scheduled ->
+                scheduled.id != batch.id &&
+                    (scheduled.startDate ?: scheduled.scheduledAt)?.let(::normalizeDateOnly) == batchDay
+            }
+        if (conflictingBatch != null) {
+            Log.w(
+                TAG,
+                "scheduleSingleBatch conflict batch=${batch.id} conflictsWith=${conflictingBatch.id} date=${formatMillis(batchDay)}"
+            )
+            return ScheduleBatchResult(
+                success = false,
+                message = "1 day me sirf 1 batch schedule ho sakta hai."
+            )
+        }
 
         val updatedBatch = batch.copy(
             status = BatchStatus.SCHEDULED,
-            scheduledAt = triggerAt
+            scheduledAt = triggerAt,
+            repeatDaily = false
         )
 
         val alarmScheduled = scheduleWithAlarmManager(updatedBatch, triggerAt)
         if (!alarmScheduled) {
-            Log.e(TAG, "Cannot schedule batch $batchId: exact alarm could not be registered")
-            return false
+            Log.e(TAG, "Cannot schedule batch ${batch.id}: exact alarm could not be registered")
+            return ScheduleBatchResult(
+                success = false,
+                message = "Exact alarm schedule nahi ho paya."
+            )
         }
 
         repository.updateBatch(updatedBatch)
-        Log.d(TAG, "scheduleBatch success batchId=$batchId scheduledAt=${formatMillis(triggerAt)}")
-        return true
+        Log.d(TAG, "scheduleSingleBatch success batchId=${batch.id} scheduledAt=${formatMillis(triggerAt)}")
+        return ScheduleBatchResult(
+            success = true,
+            scheduledCount = 1,
+            message = "Batch scheduled successfully."
+        )
+    }
+
+    private suspend fun scheduleAutoDailySeries(anchorBatch: StatusBatch): ScheduleBatchResult {
+        val allBatches = repository.getAllBatchesList()
+        val latestAnchor = allBatches.firstOrNull { it.id == anchorBatch.id } ?: anchorBatch
+        val anchorTriggerAt = calculateNextTriggerTime(latestAnchor) ?: run {
+            Log.e(TAG, "Cannot auto-schedule batch ${anchorBatch.id}: invalid or past schedule")
+            return ScheduleBatchResult(
+                success = false,
+                message = "Auto daily ke liye future date and time choose karo."
+            )
+        }
+
+        val autoSeriesBatches = buildAutoSeriesBatches(allBatches, latestAnchor)
+        if (autoSeriesBatches.isEmpty()) {
+            return ScheduleBatchResult(
+                success = false,
+                message = "Auto daily ke liye koi draft batch available nahi hai."
+            )
+        }
+
+        val reservedDays = repository
+            .getBatchesByStatus(BatchStatus.SCHEDULED)
+            .filterNot { scheduled -> autoSeriesBatches.any { it.id == scheduled.id } }
+            .mapNotNull { it.startDate ?: it.scheduledAt }
+            .map(::normalizeDateOnly)
+            .toMutableSet()
+
+        val updates = mutableListOf<Pair<StatusBatch, StatusBatch>>()
+        var nextDay = normalizeDateOnly(latestAnchor.startDate ?: anchorTriggerAt)
+
+        autoSeriesBatches.forEach { originalBatch ->
+            val assignedDay = nextAvailableDate(nextDay, reservedDays)
+            val updatedTemplate = originalBatch.copy(
+                scheduleType = ScheduleType.AUTO,
+                startDate = assignedDay,
+                time = latestAnchor.time,
+                amPm = latestAnchor.amPm,
+                repeatDaily = false,
+                reminderMinutes = latestAnchor.reminderMinutes,
+                status = BatchStatus.SCHEDULED
+            )
+            val triggerAt = calculateNextTriggerTime(updatedTemplate) ?: run {
+                Log.e(TAG, "Failed to resolve auto-daily trigger batch=${originalBatch.id}")
+                return ScheduleBatchResult(
+                    success = false,
+                    message = "Auto daily dates prepare nahi ho paye."
+                )
+            }
+
+            updates += originalBatch to updatedTemplate.copy(scheduledAt = triggerAt)
+            nextDay = addDays(assignedDay, 1)
+        }
+
+        val armedBatchIds = mutableListOf<Long>()
+        updates.forEach { (_, updatedBatch) ->
+            val triggerAt = updatedBatch.scheduledAt ?: return ScheduleBatchResult(
+                success = false,
+                message = "Auto daily alarm prepare nahi ho paya."
+            )
+            val alarmScheduled = scheduleWithAlarmManager(updatedBatch, triggerAt)
+            if (!alarmScheduled) {
+                armedBatchIds.forEach(::cancelScheduledAlarm)
+                Log.e(TAG, "Auto daily scheduling failed while arming batch=${updatedBatch.id}")
+                return ScheduleBatchResult(
+                    success = false,
+                    message = "Auto daily schedule set nahi ho paya."
+                )
+            }
+            armedBatchIds += updatedBatch.id
+        }
+
+        updates.forEach { (_, updatedBatch) ->
+            repository.updateBatch(updatedBatch)
+        }
+
+        Log.d(
+            TAG,
+            "scheduleAutoDailySeries success anchor=${anchorBatch.id} scheduledCount=${updates.size}"
+        )
+        return ScheduleBatchResult(
+            success = true,
+            scheduledCount = updates.size,
+            message = if (updates.size > 1) {
+                "${updates.size} batches auto daily schedule ho gaye. Ab 1 day me 1 batch jayega."
+            } else {
+                "Batch auto daily mode me schedule ho gaya."
+            }
+        )
+    }
+
+    private fun buildAutoSeriesBatches(
+        allBatches: List<StatusBatch>,
+        anchorBatch: StatusBatch
+    ): List<StatusBatch> {
+        val remainingDrafts = allBatches
+            .filter { it.id != anchorBatch.id && it.status == BatchStatus.DRAFT }
+            .sortedBy { it.createdAt }
+        return buildList {
+            add(anchorBatch)
+            addAll(remainingDrafts)
+        }
     }
 
     suspend fun cancelBatchSchedule(batchId: Long): Boolean {
@@ -440,7 +592,7 @@ class StatusBatchManager(
         }
 
         val now = System.currentTimeMillis()
-        val shouldRepeatDaily = batch.repeatDaily || batch.scheduleType == ScheduleType.AUTO
+        val shouldRepeatDaily = batch.repeatDaily
         if (selectedDate.timeInMillis <= now) {
             if (!shouldRepeatDaily) {
                 Log.w(
@@ -476,6 +628,35 @@ class StatusBatchManager(
     
     // Get active batch count
     suspend fun getActiveBatchCount() = repository.getActiveBatchCount()
+
+    private fun normalizeDateOnly(value: Long): Long {
+        return Calendar.getInstance().apply {
+            timeInMillis = value
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }
+
+    private fun addDays(dateMillis: Long, days: Int): Long {
+        return Calendar.getInstance().apply {
+            timeInMillis = normalizeDateOnly(dateMillis)
+            add(Calendar.DAY_OF_YEAR, days)
+        }.timeInMillis
+    }
+
+    private fun nextAvailableDate(
+        preferredDate: Long,
+        reservedDays: MutableSet<Long>
+    ): Long {
+        var candidate = normalizeDateOnly(preferredDate)
+        while (reservedDays.contains(candidate)) {
+            candidate = addDays(candidate, 1)
+        }
+        reservedDays += candidate
+        return candidate
+    }
 
     private fun formatMillis(value: Long?): String {
         if (value == null) return "null"

@@ -188,7 +188,7 @@ class StatusBatchExecutionService : Service() {
             if (allSent) {
                 clearBatchProgress(batchId)
                 cancelAutoResume(batchId)
-                val shouldRepeat = batch.repeatDaily || batch.scheduleType == ScheduleType.AUTO
+                val shouldRepeat = batch.repeatDaily
                 if (shouldRepeat) {
                     Log.d(TAG, "Rescheduling daily batch=$batchId after successful run")
                     val rescheduled = batchManager.scheduleBatch(batch.id)

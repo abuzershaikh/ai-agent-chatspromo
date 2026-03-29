@@ -157,8 +157,6 @@ fun AutoRespondScreen(
     selectedTabState: MutableState<Int> = mutableStateOf(1) // Default to Menu (index 1), 0 = Home
 ) {
     var selectedTab by selectedTabState
-    var isEnabled by remember { mutableStateOf(autoRespondManager.isAutoRespondEnabled()) }
-    var responseMessage by remember { mutableStateOf(autoRespondManager.getResponseMessage()) }
     val hasPermission by permissionState
     
     val backgroundBrush = Brush.verticalGradient(
@@ -204,17 +202,7 @@ fun AutoRespondScreen(
                     autoRespondManager = autoRespondManager,
                     notifications = notifications,
                     permissionState = permissionState,
-                    isEnabled = isEnabled,
-                    responseMessage = responseMessage,
-                    hasPermission = hasPermission,
-                    onToggle = { enabled ->
-                        isEnabled = enabled
-                        autoRespondManager.setAutoRespondEnabled(enabled)
-                    },
-                    onMessageChange = { message ->
-                        responseMessage = message
-                        autoRespondManager.saveResponseMessage(message)
-                    }
+                    hasPermission = hasPermission
                 )
                 1 -> MenuTabContent()
                 2 -> StatisticsTabContent(notifications = notifications)
@@ -292,11 +280,7 @@ fun HomeTabContent(
     autoRespondManager: AutoRespondManager,
     notifications: List<NotificationData>,
     permissionState: MutableState<Boolean>,
-    isEnabled: Boolean,
-    responseMessage: String,
-    hasPermission: Boolean,
-    onToggle: (Boolean) -> Unit,
-    onMessageChange: (String) -> Unit
+    hasPermission: Boolean
 ) {
     // State for permission explanation dialog
     var showPermissionExplanationDialog by remember { mutableStateOf(false) }
@@ -331,15 +315,6 @@ fun HomeTabContent(
                     }
                 )
             }
-        }
-        
-        // Enable/Disable Switch
-        item {
-            EnableCard(
-                isEnabled = isEnabled,
-                hasPermission = hasPermission,
-                onToggle = onToggle
-            )
         }
         
         // Keyword Replies List

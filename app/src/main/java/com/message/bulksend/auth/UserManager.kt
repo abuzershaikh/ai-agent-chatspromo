@@ -41,6 +41,9 @@ class UserManager(private val context: Context) {
         return try {
             val deviceId = DeviceUtils.getDeviceId(context)
             val email = firebaseUser.email ?: return Result.failure(Exception("Email not found"))
+            val providerName = firebaseUser.displayName?.trim().orEmpty()
+            val fallbackEmailName = email.substringBefore("@")
+                .replaceFirstChar { ch -> if (ch.isLowerCase()) ch.titlecase() else ch.toString() }
 
             // No device restriction - allow login on any device
             Log.d(TAG, "Creating/updating user for email: $email on device: $deviceId")
@@ -51,15 +54,30 @@ class UserManager(private val context: Context) {
                 .get()
                 .await()
 
+            // If user already filled the details form, prefer that full name for profile consistency.
+            val userDetailsName = firestore.collection("userDetails")
+                .document(firebaseUser.uid)
+                .get()
+                .await()
+                .getString("fullName")
+                ?.trim()
+                .orEmpty()
+
             val currentTime = Timestamp.now()
 
             val userData = if (!existingUserDoc.exists()) {
                 // New user
                 val newLoginHistory = listOf(DeviceUtils.createLoginHistoryItem(context, deviceId))
+                val resolvedDisplayName = when {
+                    userDetailsName.isNotBlank() -> userDetailsName
+                    providerName.isNotBlank() -> providerName
+                    fallbackEmailName.isNotBlank() -> fallbackEmailName
+                    else -> "User"
+                }
                 UserData(
                     email = email,
                     userId = firebaseUser.uid,
-                    displayName = firebaseUser.displayName ?: "",
+                    displayName = resolvedDisplayName,
                     profilePhotoUrl = firebaseUser.photoUrl?.toString() ?: "",
                     deviceId = deviceId,
                     deviceInfo = DeviceUtils.createDeviceInfo(context),
@@ -85,6 +103,13 @@ class UserManager(private val context: Context) {
                 val existingUser = existingUserDoc.toObject(UserData::class.java)!!
                 val newLoginHistoryItem = DeviceUtils.createLoginHistoryItem(context, deviceId)
                 val updatedLoginHistory = (existingUser.loginHistory + newLoginHistoryItem).takeLast(10) // Keep last 10 logins
+                val resolvedDisplayName = when {
+                    userDetailsName.isNotBlank() -> userDetailsName
+                    providerName.isNotBlank() -> providerName
+                    existingUser.displayName.isNotBlank() -> existingUser.displayName
+                    fallbackEmailName.isNotBlank() -> fallbackEmailName
+                    else -> "User"
+                }
 
                 if (existingUser.deviceId != deviceId) {
                     Log.w(TAG, "Device change detected for ${existingUser.email}: ${existingUser.deviceId} -> $deviceId")
@@ -96,7 +121,7 @@ class UserManager(private val context: Context) {
                     lastLoginDate = currentTime,
                     isActive = true,
                     accountState = "active",
-                    displayName = firebaseUser.displayName ?: existingUser.displayName,
+                    displayName = resolvedDisplayName,
                     profilePhotoUrl = firebaseUser.photoUrl?.toString() ?: existingUser.profilePhotoUrl,
                     loginHistory = updatedLoginHistory
                 )

@@ -392,6 +392,28 @@ fun UserDetailsScreen() {
                                             )
                                             android.util.Log.d("UserDetails", "✅ Saved to UserDetailsPreferences with referralCode: $finalReferralCode")
                                             
+                                            // Keep profile collection synced so Profile screen gets first-time name immediately.
+                                            val authEmail = currentUser?.email ?: email
+                                            if (authEmail.isNotBlank()) {
+                                                FirebaseFirestore.getInstance()
+                                                    .collection("email_data")
+                                                    .document(authEmail)
+                                                    .set(
+                                                        mapOf(
+                                                            "userId" to userId,
+                                                            "email" to authEmail,
+                                                            "displayName" to fullName.trim()
+                                                        ),
+                                                        SetOptions.merge()
+                                                    )
+                                                    .addOnSuccessListener {
+                                                        android.util.Log.d("UserDetails", "Synced profile name to email_data")
+                                                    }
+                                                    .addOnFailureListener { syncError ->
+                                                        android.util.Log.e("UserDetails", "Failed syncing profile name to email_data", syncError)
+                                                    }
+                                            }
+
                                             // Continue affiliate setup in background even after activity finishes
                                             kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                                                 try {

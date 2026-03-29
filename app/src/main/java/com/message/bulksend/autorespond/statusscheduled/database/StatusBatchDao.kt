@@ -18,6 +18,9 @@ interface StatusBatchDao {
     @Query("SELECT * FROM status_batches ORDER BY createdAt DESC")
     fun getAllBatches(): Flow<List<StatusBatch>>
 
+    @Query("SELECT * FROM status_batches ORDER BY createdAt ASC")
+    suspend fun getAllBatchesList(): List<StatusBatch>
+
     @Query("SELECT * FROM status_batches WHERE id = :batchId")
     suspend fun getBatchById(batchId: Long): StatusBatch?
 

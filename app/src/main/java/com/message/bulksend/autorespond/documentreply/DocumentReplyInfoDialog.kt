@@ -269,8 +269,8 @@ object DocumentReplyInfoDialog {
             DocumentReplyStep(
                 icon = Icons.Default.Settings,
                 iconColor = Color(0xFFFF9800),
-                title = "Enable Auto Respond",
-                description = "Go to Auto Respond settings and enable the feature. Make sure notification access and accessibility permissions are granted."
+                title = "Grant Permissions",
+                description = "Make sure notification access and accessibility permissions are granted."
             ),
             DocumentReplyStep(
                 icon = Icons.Default.Notifications,

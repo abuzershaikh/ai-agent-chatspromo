@@ -395,37 +395,58 @@ class ReferralManager(private val context: Context) {
         body: JSONObject? = null,
         includeAuth: Boolean
     ): JSONObject = withContext(Dispatchers.IO) {
-        val requestBuilder = Request.Builder()
-            .url("$WORKER_BASE_URL$path")
-            .header("Accept", "application/json")
+        suspend fun executeRequest(forceRefreshToken: Boolean): JSONObject {
+            val requestBuilder = Request.Builder()
+                .url("$WORKER_BASE_URL$path")
+                .header("Accept", "application/json")
 
-        if (includeAuth) {
-            val currentUser = auth.currentUser ?: throw IllegalStateException("User not logged in")
-            val idToken = currentUser.getIdToken(false).await().token
-                ?: throw IllegalStateException("Unable to get Firebase ID token")
-            requestBuilder.header("Authorization", "Bearer $idToken")
-        }
-
-        if (method == "GET") {
-            requestBuilder.get()
-        } else {
-            val requestBody = (body?.toString() ?: "{}").toRequestBody(JSON_MEDIA_TYPE)
-            requestBuilder.method(method, requestBody)
-        }
-
-        httpClient.newCall(requestBuilder.build()).execute().use { response ->
-            val responseText = response.body?.string().orEmpty()
-            val json = parseJsonObject(responseText)
-
-            if (!response.isSuccessful) {
-                val errorMessage = json.optStringOrNull("error")
-                    ?: json.optStringOrNull("message")
-                    ?: "Request failed with code ${response.code}"
-                throw IllegalStateException(errorMessage)
+            if (includeAuth) {
+                val currentUser = auth.currentUser ?: throw IllegalStateException("User not logged in")
+                val idToken = currentUser.getIdToken(forceRefreshToken).await().token
+                    ?: throw IllegalStateException("Unable to get Firebase ID token")
+                requestBuilder.header("Authorization", "Bearer $idToken")
             }
 
-            json
+            if (method == "GET") {
+                requestBuilder.get()
+            } else {
+                val requestBody = (body?.toString() ?: "{}").toRequestBody(JSON_MEDIA_TYPE)
+                requestBuilder.method(method, requestBody)
+            }
+
+            httpClient.newCall(requestBuilder.build()).execute().use { response ->
+                val responseText = response.body?.string().orEmpty()
+                val json = parseJsonObject(responseText)
+
+                if (!response.isSuccessful) {
+                    val errorMessage = json.optStringOrNull("error")
+                        ?: json.optStringOrNull("message")
+                        ?: "Request failed with code ${response.code}"
+                    throw IllegalStateException(errorMessage)
+                }
+
+                return json
+            }
         }
+
+        try {
+            executeRequest(forceRefreshToken = false)
+        } catch (e: IllegalStateException) {
+            if (includeAuth && shouldRetryWithFreshToken(e.message)) {
+                Log.w(TAG, "Referral token rejected, retrying with fresh Firebase ID token")
+                executeRequest(forceRefreshToken = true)
+            } else {
+                throw e
+            }
+        }
+    }
+
+    private fun shouldRetryWithFreshToken(message: String?): Boolean {
+        val normalized = message?.lowercase() ?: return false
+        return normalized.contains("invalid firebase id token") ||
+            normalized.contains("invalid id token") ||
+            normalized.contains("token expired") ||
+            normalized.contains("jwt")
     }
 
     private fun parseJsonObject(responseText: String): JSONObject {

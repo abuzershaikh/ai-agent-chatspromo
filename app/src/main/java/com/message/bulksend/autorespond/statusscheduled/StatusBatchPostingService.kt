@@ -103,8 +103,8 @@ class StatusBatchPostingService : Service() {
             // Update status to posted
             repository.updateBatchStatus(batchId, BatchStatus.POSTED)
             
-            // If repeat daily, reschedule
-            if (batch.repeatDaily || batch.scheduleType == com.message.bulksend.autorespond.statusscheduled.models.ScheduleType.AUTO) {
+            // Legacy repeat-daily support only.
+            if (batch.repeatDaily) {
                 Log.d(TAG, "Attempting reschedule for batch=$batchId after successful posting")
                 manager.scheduleBatch(batchId)
                 Log.d(TAG, "Batch rescheduled for next day")

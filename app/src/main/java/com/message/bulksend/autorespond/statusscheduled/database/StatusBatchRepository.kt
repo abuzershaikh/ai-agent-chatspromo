@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.Flow
 class StatusBatchRepository(private val dao: StatusBatchDao) {
     
     fun getAllBatches(): Flow<List<StatusBatch>> = dao.getAllBatches()
+
+    suspend fun getAllBatchesList(): List<StatusBatch> = dao.getAllBatchesList()
     
     suspend fun insertBatch(batch: StatusBatch): Long = dao.insertBatch(batch)
     
