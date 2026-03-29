@@ -85,6 +85,7 @@ import com.message.bulksend.aiagent.tools.woocommerce.WooCommerceAlertProcessor
 import com.message.bulksend.userdetails.UserDetailsPreferences
 import com.message.bulksend.agreement.PrivacyPolicyDialog
 import com.message.bulksend.agreement.PrivacyPolicyHelper
+import com.message.bulksend.utils.PreferencesSync
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.tasks.await
@@ -107,6 +108,7 @@ class MainActivity : ComponentActivity() {
         // Initialize Welcome Message Manager
         welcomeMessageManager = WelcomeMessageManager(this)
         wooAlertProcessor = WooCommerceAlertProcessor(applicationContext)
+        PreferencesSync.startRealtimeSubscriptionSync(applicationContext)
 
         // Log app open event
         logAnalyticsEvent("app_opened", null)
@@ -215,6 +217,7 @@ class MainActivity : ComponentActivity() {
         welcomeMessageManager.cleanup()
         wooAlertsListener?.remove()
         wooAlertsListener = null
+        PreferencesSync.stopRealtimeSubscriptionSync()
     }
 
     private fun startWooRealtimeAlertListener() {

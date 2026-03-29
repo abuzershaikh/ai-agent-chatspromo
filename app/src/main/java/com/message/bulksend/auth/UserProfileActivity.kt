@@ -40,6 +40,9 @@ import androidx.lifecycle.lifecycleScope
 import com.google.firebase.auth.FirebaseAuth
 import com.message.bulksend.data.UserData
 import com.message.bulksend.utils.DeviceUtils
+import com.message.bulksend.utils.PreferencesSync
+import com.message.bulksend.userdetails.UserDetailsActivity
+import com.message.bulksend.userdetails.UserDetailsPreferences
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -71,6 +74,7 @@ class UserProfileActivity : ComponentActivity() {
 
     private fun handleLogout() {
         lifecycleScope.launch {
+            PreferencesSync.stopRealtimeSubscriptionSync()
             auth.currentUser?.email?.let { email ->
                 userManager.logoutUser(email)
             }
@@ -88,19 +92,48 @@ fun UserProfileScreen(
     onLogout: () -> Unit,
     onSendSupportEmail: (String) -> Unit
 ) {
+    val context = LocalContext.current
     var userData by remember { mutableStateOf<UserData?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var showLogoutDialog by remember { mutableStateOf(false) }
     var isAnimated by remember { mutableStateOf(false) }
 
     val auth = FirebaseAuth.getInstance()
-    val userManager = UserManager(androidx.compose.ui.platform.LocalContext.current)
+    val userManager = UserManager(context)
+    val userDetailsPrefs = remember { UserDetailsPreferences(context) }
 
     // Load user data
     LaunchedEffect(Unit) {
-        auth.currentUser?.email?.let { email ->
-            userData = userManager.getUserData(email)
+        val currentUser = auth.currentUser
+        val email = currentUser?.email ?: userDetailsPrefs.getEmail().orEmpty()
+        val detailsName = userDetailsPrefs.getFullName().orEmpty().trim()
+        val authName = currentUser?.displayName?.trim().orEmpty()
+        val fallbackName = when {
+            detailsName.isNotBlank() -> detailsName
+            authName.isNotBlank() -> authName
+            else -> email.substringBefore("@")
+                .replaceFirstChar { ch -> if (ch.isLowerCase()) ch.titlecase() else ch.toString() }
+                .ifBlank { "User" }
         }
+
+        val fetchedUser = if (email.isNotBlank()) userManager.getUserData(email) else null
+
+        userData = when {
+            fetchedUser != null && fetchedUser.displayName.isBlank() && fallbackName.isNotBlank() ->
+                fetchedUser.copy(displayName = fallbackName)
+            fetchedUser != null -> fetchedUser
+            email.isNotBlank() -> UserData(
+                email = email,
+                userId = currentUser?.uid ?: userDetailsPrefs.getUserId().orEmpty(),
+                displayName = fallbackName,
+                uniqueIdentifier = DeviceUtils.generateUniqueIdentifier(
+                    email = email,
+                    deviceId = DeviceUtils.getDeviceId(context)
+                )
+            )
+            else -> null
+        }
+
         isLoading = false
         delay(300)
         isAnimated = true
@@ -211,6 +244,13 @@ fun UserProfileScreen(
                         )
                     }
                 }
+                if (userData == null) {
+                    EmptyProfileState(
+                        onGoToDetails = {
+                            context.startActivity(Intent(context, UserDetailsActivity::class.java))
+                        }
+                    )
+                }
             }
         }
     }
@@ -252,6 +292,49 @@ fun UserProfileScreen(
             },
             shape = RoundedCornerShape(16.dp)
         )
+    }
+}
+
+@Composable
+private fun EmptyProfileState(onGoToDetails: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.18f))
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(20.dp)
+                    .widthIn(max = 360.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Profile data not available yet",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = "Please complete your details once, then reopen profile.",
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = 14.sp,
+                    textAlign = TextAlign.Center
+                )
+                Button(
+                    onClick = onGoToDetails,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1))
+                ) {
+                    Text("Complete Details")
+                }
+            }
+        }
     }
 }
 
@@ -376,7 +459,9 @@ fun ProfileContent(
             subscriptionInfo = userManager.getSubscriptionInfo(userData.email)
         }
 
-        val isPremium = (subscriptionInfo["type"] as? String ?: "free") == "premium"
+        val currentType = subscriptionInfo["type"] as? String ?: "free"
+        val currentExpired = subscriptionInfo["isExpired"] as? Boolean ?: false
+        val isPremiumActive = currentType == "premium" && !currentExpired
         
         ProfileSection(
             title = "Subscription Plan",
@@ -388,9 +473,11 @@ fun ProfileContent(
 
                 // Show plan type with monthly/lifetime info
                 val planDisplay = when {
-                    type == "premium" && !isExpired && planType == "monthly" -> "Premium (Monthly)"
-                    type == "premium" && !isExpired && planType == "lifetime" -> "Premium (Lifetime)"
-                    type == "premium" && !isExpired -> "Premium"
+                    isExpired -> "Plan Ended"
+                    type == "premium" && planType == "monthly" -> "Premium (Monthly)"
+                    type == "premium" && planType == "yearly" -> "Premium (Yearly)"
+                    type == "premium" && planType == "lifetime" -> "Premium (Lifetime)"
+                    type == "premium" -> "Premium"
                     else -> "Free"
                 }
 
@@ -398,7 +485,7 @@ fun ProfileContent(
                     Icons.Default.Star,
                     "Plan Type",
                     planDisplay,
-                    isPremium
+                    isPremiumActive
                 ))
 
                 if (type == "premium") {
@@ -406,9 +493,9 @@ fun ProfileContent(
                         val dateStr = dateFormat.format((endDate as com.google.firebase.Timestamp).toDate())
                         add(ProfileItem(
                             Icons.Default.Schedule,
-                            "Plan Expires",
-                            if (isExpired) "Expired" else dateStr,
-                            isPremium
+                            if (isExpired) "Plan Ended On" else "Plan Expires",
+                            if (isExpired) "Plan Ended • $dateStr" else dateStr,
+                            isPremiumActive
                         ))
                     }
                 }
