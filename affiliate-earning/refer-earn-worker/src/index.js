@@ -2199,21 +2199,30 @@ async function handleGenerateCode({ request, env, firestore, auth }) {
     auth.email,
     auth.uid
   );
-  if (userDoc.myReferralCode) {
+  const existingReferralCode = getExistingReferralCode(userDoc);
+  if (existingReferralCode) {
+    const now = (/* @__PURE__ */ new Date()).toISOString();
     await ensureReferralCodeMapping({
       firestore,
-      referralCode: userDoc.myReferralCode,
+      referralCode: existingReferralCode,
       referrerUserId: auth.uid,
       referrerName: userDoc.fullName || auth.name || fullName,
       referrerEmail: userDoc.email || auth.email || ""
     });
-    const canonicalLink = buildReferralLink(env, request, userDoc.myReferralCode);
-    if (userDoc.referralLink !== canonicalLink) {
-      await firestore.setDocument(userPath, { referralLink: canonicalLink }, { merge: true });
+    const canonicalLink = buildReferralLink(env, request, existingReferralCode);
+    if (userDoc.myReferralCode !== existingReferralCode || userDoc.referralLink !== canonicalLink) {
+      await firestore.setDocument(userPath, {
+        userId: userDoc.userId || auth.uid,
+        fullName: userDoc.fullName || auth.name || fullName,
+        email: userDoc.email || auth.email || "",
+        myReferralCode: existingReferralCode,
+        referralLink: canonicalLink,
+        updatedAt: now
+      }, { merge: true });
     }
     return json({
       success: true,
-      referralCode: userDoc.myReferralCode,
+      referralCode: existingReferralCode,
       referralLink: canonicalLink,
       message: "Affiliate code already exists"
     });
@@ -2575,28 +2584,69 @@ __name(handleRewardReferral, "handleRewardReferral");
 async function handleReferralStats({ request, env, firestore, auth }) {
   const userPath = buildUserPath(auth.uid);
   const userDoc = await firestore.getDocument(userPath) || {};
-  if (userDoc.myReferralCode) {
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const fullName = pickFirstNonEmpty(
+    userDoc.fullName,
+    auth.name,
+    userDoc.email,
+    auth.email,
+    auth.uid
+  );
+  let referralCode = getExistingReferralCode(userDoc);
+  let referralLink = null;
+  if (referralCode) {
     await ensureReferralCodeMapping({
       firestore,
-      referralCode: userDoc.myReferralCode,
+      referralCode,
       referrerUserId: auth.uid,
-      referrerName: userDoc.fullName || auth.name || auth.uid,
+      referrerName: userDoc.fullName || auth.name || fullName,
       referrerEmail: userDoc.email || auth.email || ""
     });
-  }
-  const clickDocs = await firestore.listDocuments(`${userPath}/referralClicks`);
-  const referralLink = userDoc.myReferralCode ? buildReferralLink(env, request, userDoc.myReferralCode) : null;
-  if (referralLink && userDoc.referralLink !== referralLink) {
+    referralLink = buildReferralLink(env, request, referralCode);
+    if (userDoc.myReferralCode !== referralCode || userDoc.referralLink !== referralLink) {
+      await firestore.setDocument(userPath, {
+        userId: userDoc.userId || auth.uid,
+        fullName: userDoc.fullName || auth.name || fullName,
+        email: userDoc.email || auth.email || "",
+        myReferralCode: referralCode,
+        referralLink,
+        updatedAt: now
+      }, { merge: true });
+    }
+  } else {
+    referralCode = await generateUniqueReferralCode(firestore, fullName, auth.uid);
+    referralLink = buildReferralLink(env, request, referralCode);
+    await firestore.setDocument(`referralCodes/${referralCode}`, {
+      referralCode,
+      referrerUserId: auth.uid,
+      referrerName: userDoc.fullName || auth.name || fullName,
+      referrerEmail: userDoc.email || auth.email || "",
+      createdAt: now,
+      active: true
+    });
     await firestore.setDocument(userPath, {
+      userId: auth.uid,
+      fullName: userDoc.fullName || auth.name || fullName,
+      email: userDoc.email || auth.email || "",
+      myReferralCode: referralCode,
       referralLink,
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      referralCount: toInt(userDoc.referralCount),
+      referralLinkClicks: toInt(userDoc.referralLinkClicks),
+      trackedInstalls: toInt(userDoc.trackedInstalls),
+      trackedRegistrations: toInt(userDoc.trackedRegistrations),
+      successfulReferrals: toInt(userDoc.successfulReferrals),
+      totalReferralEarnings: toInt(userDoc.totalReferralEarnings),
+      pendingEarnings: toInt(userDoc.pendingEarnings),
+      withdrawnEarnings: toInt(userDoc.withdrawnEarnings),
+      updatedAt: now
     }, { merge: true });
   }
+  const clickDocs = await firestore.listDocuments(`${userPath}/referralClicks`);
   const referralLinkClicks = Math.max(toInt(userDoc.referralLinkClicks), clickDocs.length);
   return json({
     success: true,
     stats: {
-      myReferralCode: userDoc.myReferralCode || null,
+      myReferralCode: referralCode || null,
       referralLink: referralLink || userDoc.referralLink || null,
       referralCount: toInt(userDoc.referralCount),
       referralLinkClicks,
@@ -2824,6 +2874,17 @@ function buildUserPath(userId) {
   return `userDetails/${userId}`;
 }
 __name(buildUserPath, "buildUserPath");
+function getExistingReferralCode(userDoc) {
+  return sanitizeReferralCode(
+    pickFirstNonEmpty(
+      userDoc?.myReferralCode,
+      userDoc?.referralCode,
+      userDoc?.affiliateCode,
+      userDoc?.affiliateReferralCode
+    )
+  );
+}
+__name(getExistingReferralCode, "getExistingReferralCode");
 function sanitizeReferralCode(value) {
   if (value === void 0 || value === null) {
     return "";
