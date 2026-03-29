@@ -1,0 +1,9 @@
+name = "refer-earn-worker"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+workers_dev = true
+
+[vars]
+ANDROID_PACKAGE_NAME = "com.message.bulksend"
+REFERRAL_PUBLIC_BASE_URL = "https://refer-earn-worker.aawuazer.workers.dev"
+REFERRAL_COMMISSION_RATE = "30"
