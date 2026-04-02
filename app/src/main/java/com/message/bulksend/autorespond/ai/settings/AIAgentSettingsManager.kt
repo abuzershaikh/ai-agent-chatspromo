@@ -167,6 +167,12 @@ class AIAgentSettingsManager(context: Context) {
             ?: "Agent Write Sheet"
         set(value) = prefs.edit().putString("custom_template_write_sheet_name", value).apply()
 
+    var customTemplateLinkedWriteSheetName: String
+        get() = prefs.getString("custom_template_linked_write_sheet_name", "") ?: ""
+        set(value) = prefs.edit()
+            .putString("custom_template_linked_write_sheet_name", value.trim())
+            .apply()
+
     var customTemplateSalesSheetName: String
         get() = prefs.getString("custom_template_sales_sheet_name", "Product Sales Sheet")
             ?: "Product Sales Sheet"

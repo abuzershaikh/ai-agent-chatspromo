@@ -157,6 +157,8 @@ fun ManageContactsScreen() {
     var showPremiumDialog by remember { mutableStateOf(false) }
     var currentContactCount by remember { mutableStateOf(0) }
     var contactLimit by remember { mutableStateOf(10) }
+    val fromAiAgent = activity?.intent?.getBooleanExtra("FROM_AI_AGENT", false) == true
+    var showAiAgentPopup by remember { mutableStateOf(fromAiAgent) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -315,6 +317,26 @@ fun ManageContactsScreen() {
     val listGroups = savedGroups.filter { !it.name.contains("/") }
     val folderGroups = savedGroups.filter { it.name.contains("/") }
     
+    if (showAiAgentPopup) {
+        AlertDialog(
+            onDismissRequest = { showAiAgentPopup = false },
+            title = {
+                Text("AI Agent", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text("Yaha contact jis format me add karna chahta ho add karo.")
+            },
+            confirmButton = {
+                TextButton(onClick = { showAiAgentPopup = false }) {
+                    Text("OK", color = MaterialTheme.colorScheme.primary)
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            textContentColor = MaterialTheme.colorScheme.onSurface
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -648,6 +670,10 @@ fun ManageContactsScreen() {
                             Toast.makeText(context, message, Toast.LENGTH_LONG).show()
                             showGroupNameDialog = false
                             importedContacts = emptyList()
+                            if (fromAiAgent) {
+                                activity?.setResult(Activity.RESULT_OK)
+                                activity?.finish()
+                            }
                         },
                         onLimitReached = { current, limit ->
                             currentContactCount = current

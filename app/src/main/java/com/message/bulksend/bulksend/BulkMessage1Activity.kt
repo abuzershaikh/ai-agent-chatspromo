@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -45,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.airbnb.lottie.compose.*
 import com.message.bulksend.anylatic.ReportlistActivity
+import com.message.bulksend.bulksenderaiagent.BulksenderAiAgentActivity
 import com.message.bulksend.contactmanager.ContactzActivity
 import com.message.bulksend.templates.TemplateActivity
 import com.message.bulksend.ui.theme.BulksendTestTheme
@@ -163,7 +165,7 @@ fun BulkMessage1Screen() {
                     .padding(innerPadding)
                     .fillMaxSize()
                     .background(backgroundBrush),
-                contentPadding = PaddingValues(16.dp),
+                contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 120.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // Report Buttons (Same as MainActivity)
@@ -374,8 +376,19 @@ fun BulkMessage1Screen() {
                         }
                     )
                 }
-
             }
+
+            FloatingChatbotLauncher(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(end = 18.dp, bottom = 18.dp),
+                onClick = {
+                    context.startActivity(
+                        Intent(context, BulksenderAiAgentActivity::class.java)
+                    )
+                }
+            )
         }
     }
 }
@@ -1284,6 +1297,117 @@ fun AutonomousSenderCard(onClick: () -> Unit) {
     // Info Dialog
     if (showInfoDialog) {
         AutonomousSenderInfoDialog(onDismiss = { showInfoDialog = false })
+    }
+}
+
+@Composable
+fun FloatingChatbotLauncher(
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val composition by rememberLottieComposition(LottieCompositionSpec.Asset("chatbot.json"))
+    val progress by animateLottieCompositionAsState(
+        composition = composition,
+        iterations = LottieConstants.IterateForever
+    )
+    val pulseTransition = rememberInfiniteTransition(label = "chatbot_pulse")
+    val pulseScale by pulseTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "chatbot_scale"
+    )
+
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = Color(0xFF0F1F3A).copy(alpha = 0.92f),
+            border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.45f)),
+            tonalElevation = 4.dp
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .background(Color(0xFF38BDF8), CircleShape)
+                )
+                Text(
+                    text = "AI Chat Setup",
+                    fontSize = 12.sp,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .size(84.dp)
+                .scale(pulseScale)
+                .clip(CircleShape)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFF38BDF8),
+                            Color(0xFF0EA5E9),
+                            Color(0xFF102A43)
+                        )
+                    )
+                )
+                .border(
+                    width = 2.dp,
+                    brush = Brush.linearGradient(
+                        listOf(
+                            Color.White.copy(alpha = 0.85f),
+                            Color(0xFF7DD3FC),
+                            Color(0xFF38BDF8)
+                        )
+                    ),
+                    shape = CircleShape
+                )
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(102.dp)
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFF38BDF8).copy(alpha = 0.22f),
+                                Color.Transparent
+                            )
+                        ),
+                        CircleShape
+                    )
+            )
+
+            if (composition != null) {
+                LottieAnimation(
+                    composition = composition,
+                    progress = { progress },
+                    modifier = Modifier.size(62.dp)
+                )
+            } else {
+                Icon(
+                    Icons.Outlined.SmartToy,
+                    contentDescription = "Chatbot",
+                    tint = Color.White,
+                    modifier = Modifier.size(34.dp)
+                )
+            }
+        }
     }
 }
 

@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.message.bulksend.bulksenderaiagent.AiAgentLaunchExtras
 import com.message.bulksend.bulksend.*
 import com.message.bulksend.data.ContactStatus
 import com.message.bulksend.db.AppDatabase
@@ -165,6 +166,11 @@ fun SheetCampaignScreen() {
 
     val intent = context.findActivity()?.intent
     val campaignIdToResumeFromHistory = remember { intent?.getStringExtra("CAMPAIGN_ID_TO_RESUME") }
+    val incomingCampaignName = remember { intent?.getStringExtra("CAMPAIGN_NAME") }
+    val incomingCountryCode = remember { intent?.getStringExtra("COUNTRY_CODE") }
+    val incomingPresetMessage = remember { intent?.getStringExtra(AiAgentLaunchExtras.EXTRA_PRESET_MESSAGE) }
+    val incomingPresetMediaUri = remember { intent?.getStringExtra(AiAgentLaunchExtras.EXTRA_PRESET_MEDIA_URI) }
+    val incomingPresetSheetUri = remember { intent?.getStringExtra(AiAgentLaunchExtras.EXTRA_PRESET_SHEET_URI) }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
@@ -243,6 +249,40 @@ fun SheetCampaignScreen() {
                 isStep2Expanded = false
                 isStep3Expanded = false
                 campaignToResumeLoaded = true
+            }
+        }
+    }
+
+    LaunchedEffect(
+        campaignIdToResumeFromHistory,
+        incomingCampaignName,
+        incomingCountryCode,
+        incomingPresetMessage,
+        incomingPresetMediaUri,
+        incomingPresetSheetUri
+    ) {
+        if (campaignIdToResumeFromHistory != null) return@LaunchedEffect
+
+        if (!incomingCampaignName.isNullOrBlank() && campaignName.isBlank()) {
+            campaignName = incomingCampaignName
+        }
+        if (!incomingCountryCode.isNullOrBlank() && countryCode.isBlank()) {
+            countryCode = incomingCountryCode
+        }
+        if (!incomingPresetMessage.isNullOrBlank() && templateMessage.text.isBlank()) {
+            templateMessage = TextFieldValue(incomingPresetMessage)
+        }
+        if (!incomingPresetMediaUri.isNullOrBlank() && mediaUri == null) {
+            mediaUri = Uri.parse(incomingPresetMediaUri)
+        }
+        if (!incomingPresetSheetUri.isNullOrBlank() && selectedSheetUri == null) {
+            val presetSheetUri = Uri.parse(incomingPresetSheetUri)
+            selectedSheetUri = presetSheetUri
+            sheetUrl = ""
+            sheetFileName = getFileName(context, presetSheetUri)
+            sheetData = withContext(Dispatchers.IO) { parseSheet(context, presetSheetUri) }
+            if (sheetData == null) {
+                Toast.makeText(context, "Failed to read selected sheet file.", Toast.LENGTH_SHORT).show()
             }
         }
     }

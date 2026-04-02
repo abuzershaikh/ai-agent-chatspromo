@@ -5,6 +5,7 @@ import com.message.bulksend.autorespond.ai.customsheet.CustomTemplateSheetManage
 import com.message.bulksend.autorespond.ai.settings.AIAgentSettingsManager
 import com.message.bulksend.autorespond.tools.sheetconnect.SheetConnectManager
 import com.message.bulksend.autorespond.tools.sheetconnect.SheetMappingConfig
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Locale
 
@@ -45,6 +46,7 @@ class NativeSheetWriteExecutor(
             return SkillExecutionResult.ignored("No sheet fields provided")
         }
 
+        val resolvedLocalTarget = resolveLocalTableTarget(targetSheet)
         val ok =
             when (settings.customTemplateWriteStorageMode) {
                 AIAgentSettingsManager.SHEET_WRITE_MODE_GOOGLE ->
@@ -57,14 +59,20 @@ class NativeSheetWriteExecutor(
                 else ->
                     writeToTableSheet(
                         payload = cleaned,
-                        targetSheet = targetSheet,
+                        targetSheet = resolvedLocalTarget.sheetName,
+                        useLinkedSheetMapping = resolvedLocalTarget.useLinkedSheetMapping,
                         senderPhone = senderPhone,
                         senderName = senderName,
                         sourceMessage = sourceMessage
                     )
             }
 
-        val sheetLabel = targetSheet?.ifBlank { "default" } ?: "default"
+        val sheetLabel =
+            when (settings.customTemplateWriteStorageMode) {
+                AIAgentSettingsManager.SHEET_WRITE_MODE_GOOGLE ->
+                    targetSheet?.ifBlank { "default" } ?: "default"
+                else -> resolvedLocalTarget.sheetName?.ifBlank { "default" } ?: "default"
+            }
         val action = "WRITE_SHEET:$sheetLabel:${if (ok) "SUCCESS" else "FAILED"}"
 
         return if (ok) {
@@ -90,10 +98,21 @@ class NativeSheetWriteExecutor(
     private suspend fun writeToTableSheet(
         payload: Map<String, String>,
         targetSheet: String?,
+        useLinkedSheetMapping: Boolean,
         senderPhone: String,
         senderName: String,
         sourceMessage: String
     ): Boolean {
+        if (useLinkedSheetMapping && !targetSheet.isNullOrBlank()) {
+            return sheetManager.upsertMappedDataForPhone(
+                folderName = settings.customTemplateSheetFolderName,
+                sheetName = targetSheet,
+                phoneNumber = senderPhone,
+                fields = payload,
+                allowedFields = resolveConfiguredWriteFields()
+            )
+        }
+
         val templateName = settings.customTemplateName.trim().ifBlank { "Custom AI Template" }
         return sheetManager.upsertDataForPhone(
             templateName = templateName,
@@ -257,6 +276,47 @@ class NativeSheetWriteExecutor(
         return out
     }
 
+    private fun resolveLocalTableTarget(targetSheet: String?): LocalTableWriteTarget {
+        val explicitTarget = targetSheet?.trim().orEmpty()
+        val linkedSheet = settings.customTemplateLinkedWriteSheetName.trim()
+        val linkedFolder = settings.customTemplateSheetFolderName.trim()
+        val resolvedSheet = explicitTarget.ifBlank { linkedSheet }.ifBlank { null }
+        val useLinkedSheetMapping =
+            resolvedSheet != null &&
+                linkedSheet.isNotBlank() &&
+                linkedFolder.isNotBlank() &&
+                resolvedSheet.equals(linkedSheet, ignoreCase = true)
+        return LocalTableWriteTarget(
+            sheetName = resolvedSheet,
+            useLinkedSheetMapping = useLinkedSheetMapping
+        )
+    }
+
+    private fun resolveConfiguredWriteFields(): List<String> {
+        val rawSchema = settings.customTemplateWriteFieldSchema.trim()
+        if (rawSchema.isNotBlank()) {
+            runCatching {
+                val parsed = mutableListOf<String>()
+                val arr = JSONArray(rawSchema)
+                for (index in 0 until arr.length()) {
+                    val obj = arr.optJSONObject(index) ?: continue
+                    val name = obj.optString("name").trim()
+                    if (name.isNotBlank()) {
+                        parsed += name
+                    }
+                }
+                if (parsed.isNotEmpty()) {
+                    return parsed
+                }
+            }
+        }
+
+        return settings.customTemplateWriteSheetColumns
+            .split(",")
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+    }
+
     private fun resolveColumnAlias(
         normalizedAlias: String,
         config: SheetMappingConfig,
@@ -375,4 +435,9 @@ class NativeSheetWriteExecutor(
         } while (value >= 0)
         return chars.reverse().toString()
     }
+
+    private data class LocalTableWriteTarget(
+        val sheetName: String?,
+        val useLinkedSheetMapping: Boolean
+    )
 }

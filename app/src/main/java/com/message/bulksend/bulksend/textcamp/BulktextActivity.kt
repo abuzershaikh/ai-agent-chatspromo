@@ -47,6 +47,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.message.bulksend.bulksenderaiagent.AiAgentLaunchExtras
 import com.message.bulksend.bulksend.*
 import com.message.bulksend.contactmanager.Contact
 import com.message.bulksend.contactmanager.ContactsRepository
@@ -158,6 +159,7 @@ fun TextCampaignManagerScreen() {
     val incomingSelectedContactNumbers = remember { intent?.getStringArrayListExtra("SELECTED_CONTACTS") }
     val incomingSelectedContactNames = remember { intent?.getStringArrayListExtra("SELECTED_NAMES") ?: arrayListOf() }
     val incomingSelectedGroupName = remember { intent?.getStringExtra("SELECTED_GROUP_NAME") }
+    val incomingPresetMessage = remember { intent?.getStringExtra(AiAgentLaunchExtras.EXTRA_PRESET_MESSAGE) }
     val autonomousMessage = remember { intent?.getStringExtra("AUTONOMOUS_MESSAGE") }
     val autonomousUnique = remember { intent?.getBooleanExtra("AUTONOMOUS_UNIQUE", false) ?: false }
     var autonomousDays by remember { mutableStateOf((intent?.getIntExtra("AUTONOMOUS_DAYS", 0) ?: 0).coerceAtLeast(0)) }
@@ -398,6 +400,12 @@ fun TextCampaignManagerScreen() {
             message = ""
             autonomousRiskOverrideAccepted = false
             // We can keep the campaignName if the user has already typed it.
+        }
+    }
+
+    LaunchedEffect(selectedGroup?.id, incomingPresetMessage, campaignIdToResumeFromHistory) {
+        if (campaignIdToResumeFromHistory == null && selectedGroup != null && !incomingPresetMessage.isNullOrBlank()) {
+            message = incomingPresetMessage
         }
     }
 

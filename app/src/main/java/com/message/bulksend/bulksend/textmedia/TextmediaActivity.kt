@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.message.bulksend.bulksenderaiagent.AiAgentLaunchExtras
 import com.message.bulksend.bulksend.*
 import com.message.bulksend.contactmanager.Contact
 import com.message.bulksend.contactmanager.ContactsRepository
@@ -139,6 +140,8 @@ fun TextMediaCampaignManagerScreen() {
     val incomingSelectedContactNumbers = remember { intent?.getStringArrayListExtra("SELECTED_CONTACTS") }
     val incomingSelectedContactNames = remember { intent?.getStringArrayListExtra("SELECTED_NAMES") ?: arrayListOf() }
     val incomingSelectedGroupName = remember { intent?.getStringExtra("SELECTED_GROUP_NAME") }
+    val incomingPresetMessage = remember { intent?.getStringExtra(AiAgentLaunchExtras.EXTRA_PRESET_MESSAGE) }
+    val incomingPresetMediaUri = remember { intent?.getStringExtra(AiAgentLaunchExtras.EXTRA_PRESET_MEDIA_URI) }
 
     val progressAnimation by animateFloatAsState(
         targetValue = campaignProgress,
@@ -379,6 +382,22 @@ fun TextMediaCampaignManagerScreen() {
             campaignStatus = emptyList()
             message = ""
             mediaUri = null
+        }
+    }
+
+    LaunchedEffect(
+        selectedGroup?.id,
+        incomingPresetMessage,
+        incomingPresetMediaUri,
+        campaignIdToResumeFromHistory
+    ) {
+        if (campaignIdToResumeFromHistory == null && selectedGroup != null) {
+            if (!incomingPresetMessage.isNullOrBlank()) {
+                message = incomingPresetMessage
+            }
+            if (!incomingPresetMediaUri.isNullOrBlank()) {
+                mediaUri = Uri.parse(incomingPresetMediaUri)
+            }
         }
     }
 

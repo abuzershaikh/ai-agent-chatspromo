@@ -2491,8 +2491,10 @@ class AIAgentContextBuilder(
                         settingsManager.customTemplateWriteSheetName.trim().ifBlank {
                                 CustomTemplateSheetManager.DEFAULT_WRITE_SHEET_NAME
                         }
+                val linkedWriteSheet =
+                        settingsManager.customTemplateLinkedWriteSheetName.trim()
                 val readSheetForExamples = resolvedReferenceSheet ?: defaultReadSheet
-                val writeSheetForExamples = defaultWriteSheet
+                val writeSheetForExamples = linkedWriteSheet.ifBlank { defaultWriteSheet }
                 val configuredMatchFields =
                         settingsManager.customTemplateSheetMatchFields
                                 .split(",")
@@ -2604,6 +2606,13 @@ class AIAgentContextBuilder(
                                         "Allowed write fields: ${writeFieldNames.joinToString(", ")}\n"
                                 )
                         }
+                        if (linkedWriteSheet.isNotBlank() &&
+                                        writeMode != AIAgentSettingsManager.SHEET_WRITE_MODE_GOOGLE
+                        ) {
+                                stringBuilder.append(
+                                        "Linked user write sheet: $linkedWriteSheet\n"
+                                )
+                        }
                         stringBuilder.append(
                                 "When user asks to save/update information, append command:\n"
                         )
@@ -2638,12 +2647,24 @@ class AIAgentContextBuilder(
                                 stringBuilder.append(
                                         "Only use keys that are present in the configured Google Sheet or template-defined fields.\n"
                                 )
+                        } else if (linkedWriteSheet.isNotBlank()) {
+                                stringBuilder.append(
+                                        "Default linked local write sheet is '$linkedWriteSheet'. If user wants normal save/write, do not mention sheet/table name; the system will write there automatically.\n"
+                                )
+                                stringBuilder.append(
+                                        "Only use configured allowed write fields for this linked sheet. Do not invent or add new columns there.\n"
+                                )
+                                stringBuilder.append(
+                                        "If user explicitly wants a different table, then use:\n[WRITE_SHEET: sheet=Insurance Leads; policy_id=ABC123; premium=5000]\n"
+                                )
                         } else {
                                 stringBuilder.append(
                                         "For custom target table use:\n[WRITE_SHEET: sheet=Insurance Leads; policy_id=ABC123; premium=5000]\n"
                                 )
                         }
-                        if (writeMode != AIAgentSettingsManager.SHEET_WRITE_MODE_GOOGLE) {
+                        if (writeMode != AIAgentSettingsManager.SHEET_WRITE_MODE_GOOGLE &&
+                                        linkedWriteSheet.isBlank()
+                        ) {
                                 stringBuilder.append(
                                         "New field names become new sheet columns automatically.\n"
                                 )

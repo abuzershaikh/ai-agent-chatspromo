@@ -183,6 +183,51 @@ class CustomTemplateSheetManager(context: Context) {
         ensureFolder(cleanName).name
     }
 
+    suspend fun createLinkedWriteSheet(
+        folderName: String,
+        rawSheetName: String,
+        fieldSpecs: List<Pair<String, String>> = emptyList()
+    ): String = withContext(Dispatchers.IO) {
+        val cleanFolderName = normalizeFolderName(folderName)
+        if (cleanFolderName.isBlank()) return@withContext ""
+
+        val cleanSheetName = normalizeSheetName(rawSheetName, "Linked User Write Sheet")
+        val folder = ensureFolder(cleanFolderName)
+        val existing =
+            tableDao.getTablesByFolderIdSync(folder.id)
+                .firstOrNull { it.name.equals(cleanSheetName, ignoreCase = true) }
+        if (existing != null) {
+            ensureRowBuffer(existing.id)
+            return@withContext existing.name
+        }
+
+        val primaryColumns =
+            buildList {
+                add(ColumnSpec("Phone Number", ColumnType.PHONE))
+                fieldSpecs
+                    .mapNotNull { (rawName, rawType) ->
+                        val cleanName = normalizeColumnName(rawName)
+                        if (cleanName.isBlank() || cleanName.equals("Phone Number", ignoreCase = true)) {
+                            null
+                        } else {
+                            ColumnSpec(
+                                name = cleanName,
+                                type = mapLinkedFieldTypeToColumnType(rawType)
+                            )
+                        }
+                    }
+                    .distinctBy { it.name.lowercase(Locale.ROOT) }
+                    .forEach { add(it) }
+            }
+
+        createSheet(
+            folderId = folder.id,
+            name = cleanSheetName,
+            description = "User-linked write sheet for AI field mapping",
+            primaryColumns = primaryColumns
+        ).name
+    }
+
     suspend fun getReferenceRowByPhone(
         templateName: String,
         sheetName: String?,
@@ -243,6 +288,79 @@ class CustomTemplateSheetManager(context: Context) {
             upsertCellByColumnName(table.id, rowId, normalizeColumnName(key), value)
         }
         true
+    }
+
+    suspend fun upsertMappedDataForPhone(
+        folderName: String,
+        sheetName: String,
+        phoneNumber: String,
+        fields: Map<String, String>,
+        allowedFields: Collection<String> = emptyList()
+    ): Boolean = withContext(Dispatchers.IO) {
+        val cleanFolderName = folderName.trim()
+        val cleanSheetName = sheetName.trim()
+        if (cleanFolderName.isBlank() || cleanSheetName.isBlank()) return@withContext false
+
+        val folder = folderDao.getFolderByName(cleanFolderName) ?: return@withContext false
+        val table =
+            tableDao.getTablesByFolderIdSync(folder.id)
+                .firstOrNull { it.name.equals(cleanSheetName, ignoreCase = true) }
+                ?: return@withContext false
+
+        ensureRowBuffer(table.id)
+        val columns = columnDao.getColumnsByTableIdSync(table.id)
+        if (columns.isEmpty()) return@withContext false
+
+        val allowedNormalized =
+            allowedFields
+                .mapNotNull { it.trim().takeIf { name -> name.isNotBlank() } }
+                .map(::normalizeFieldKey)
+                .toSet()
+        val columnByNormalized =
+            columns.associateBy { column -> normalizeFieldKey(column.name) }
+        val writablePairs = linkedMapOf<ColumnModel, String>()
+
+        fields.forEach { (rawKey, rawValue) ->
+            val cleanKey = rawKey.trim()
+            val cleanValue = rawValue.trim()
+            if (cleanKey.isBlank() || cleanValue.isBlank()) return@forEach
+
+            val normalizedKey = normalizeFieldKey(cleanKey)
+            if (allowedNormalized.isNotEmpty() && normalizedKey !in allowedNormalized) {
+                return@forEach
+            }
+
+            val column = columnByNormalized[normalizedKey] ?: return@forEach
+            writablePairs[column] = cleanValue
+        }
+
+        val phoneColumn = findPreferredPhoneColumn(columns)
+        if (writablePairs.isEmpty() && (phoneColumn == null || phoneNumber.isBlank())) {
+            return@withContext false
+        }
+
+        val normalizedPhone = sanitizePhone(phoneNumber)
+        val rowId =
+            if (phoneColumn != null && normalizedPhone.isNotBlank()) {
+                findRowIdByColumnValue(table.id, phoneColumn.id, normalizedPhone, phoneNumber)
+                    ?: findFirstEmptyRow(table.id)
+                    ?: createRow(table.id)
+            } else {
+                findFirstEmptyRow(table.id) ?: createRow(table.id)
+            }
+
+        var wroteAny = false
+        if (phoneColumn != null && normalizedPhone.isNotBlank() && phoneColumn !in writablePairs.keys) {
+            upsertCell(rowId, phoneColumn.id, normalizedPhone)
+            wroteAny = true
+        }
+
+        writablePairs.forEach { (column, value) ->
+            upsertCell(rowId, column.id, value)
+            wroteAny = true
+        }
+
+        wroteAny
     }
 
     suspend fun logInteraction(
@@ -316,6 +434,19 @@ class CustomTemplateSheetManager(context: Context) {
             .replace(Regex("[^A-Za-z0-9 _-]"), " ")
             .replace(Regex("\\s+"), " ")
             .take(64)
+    }
+
+    private fun mapLinkedFieldTypeToColumnType(rawType: String?): String {
+        return when (rawType.orEmpty().trim().lowercase(Locale.ROOT)) {
+            "number" -> ColumnType.INTEGER
+            "date" -> ColumnType.DATE
+            "email" -> ColumnType.EMAIL
+            "phone" -> ColumnType.PHONE
+            "url" -> ColumnType.URL
+            "checkbox" -> ColumnType.CHECKBOX
+            "currency" -> ColumnType.AMOUNT
+            else -> ColumnType.STRING
+        }
     }
 
     private suspend fun ensureFolder(folderName: String): FolderModel {
@@ -527,6 +658,21 @@ class CustomTemplateSheetManager(context: Context) {
         }
     }
 
+    private suspend fun upsertCell(rowId: Long, columnId: Long, value: String) {
+        val existing = cellDao.getCellSync(rowId, columnId)
+        if (existing == null) {
+            cellDao.insertCell(
+                CellModel(
+                    rowId = rowId,
+                    columnId = columnId,
+                    value = value
+                )
+            )
+        } else if (existing.value != value) {
+            cellDao.updateCell(existing.copy(value = value))
+        }
+    }
+
     private suspend fun ensureColumn(tableId: Long, columnName: String): ColumnModel {
         val normalizedName = normalizeColumnName(columnName)
         val current = columnDao.getColumnsByTableIdSync(tableId)
@@ -578,6 +724,56 @@ class CustomTemplateSheetManager(context: Context) {
         val digits = raw.replace(Regex("[^0-9]"), "")
         if (digits.isBlank()) return raw.trim()
         return if (digits.length > 10) digits.takeLast(10) else digits
+    }
+
+    private fun normalizeFieldKey(raw: String): String {
+        return raw.trim()
+            .lowercase(Locale.ROOT)
+            .replace(Regex("[^a-z0-9]"), "")
+    }
+
+    private fun findPreferredPhoneColumn(columns: List<ColumnModel>): ColumnModel? {
+        val aliases =
+            listOf(
+                "phonenumber",
+                "phone",
+                "mobile",
+                "mobilenumber",
+                "contact",
+                "contactnumber",
+                "whatsapp",
+                "whatsappnumber",
+                "wanumber"
+            )
+        return columns.firstOrNull { column ->
+            normalizeFieldKey(column.name) in aliases
+        }
+    }
+
+    private suspend fun findRowIdByColumnValue(
+        tableId: Long,
+        columnId: Long,
+        normalizedValue: String,
+        rawValue: String
+    ): Long? {
+        val candidates = mutableSetOf<Long>()
+        if (normalizedValue.isNotBlank()) {
+            candidates.addAll(cellDao.findCellsByColumnAndValue(columnId, normalizedValue).map { it.rowId })
+        }
+        val cleanRawValue = rawValue.trim()
+        if (cleanRawValue.isNotBlank() && cleanRawValue != normalizedValue) {
+            candidates.addAll(cellDao.findCellsByColumnAndValue(columnId, cleanRawValue).map { it.rowId })
+        }
+        if (candidates.isEmpty() && normalizedValue.length >= 10) {
+            candidates.addAll(
+                cellDao.findRowIdsByColumnContains(
+                    tableId = tableId,
+                    columnId = columnId,
+                    token = normalizedValue.takeLast(10)
+                )
+            )
+        }
+        return candidates.firstOrNull()
     }
 
     private fun extractFirstProductHint(message: String): String {

@@ -134,6 +134,10 @@
             android:name=".autorespond.ai.ui.customai.CustomBusinessDetailsActivity"
             android:exported="false"
             android:label="Business Knowledge" />
+        <activity
+            android:name=".bulksenderaiagent.BulksenderAiAgentActivity"
+            android:exported="false"
+            android:label="AI Campaign Guide" />
 
         <activity
 

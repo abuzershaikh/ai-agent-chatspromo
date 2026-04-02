@@ -1,5 +1,6 @@
 package com.message.bulksend.autorespond.ai.ui.customai
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -46,8 +47,12 @@ internal fun CustomAIAgentSettingsTab(
     customEnabled: Boolean,
     setupInProgress: Boolean,
     customSheetFolderName: String,
+    availableCustomSheetFolderNames: List<String>,
     referenceSheetName: String,
     availableReferenceSheetNames: List<String>,
+    availableLocalWriteSheetNames: List<String>,
+    linkedWriteSheetName: String,
+    linkedWriteSheetColumns: List<String>,
     writeStorageMode: String,
     writeFields: List<CustomWriteFieldSpec>,
     writeFieldTypes: List<String>,
@@ -60,7 +65,9 @@ internal fun CustomAIAgentSettingsTab(
     onRepeatCounterLimitTextChange: (String) -> Unit,
     onRepeatCounterOwnerNotifyEnabledChange: (Boolean) -> Unit,
     onRepeatCounterOwnerPhoneChange: (String) -> Unit,
+    onCustomSheetFolderNameChange: (String) -> Unit,
     onReferenceSheetNameChange: (String) -> Unit,
+    onLinkedWriteSheetNameChange: (String) -> Unit,
     onWriteStorageModeChange: (String) -> Unit,
     onAddWriteField: () -> Unit,
     onWriteFieldNameChange: (Int, String) -> Unit,
@@ -80,18 +87,39 @@ internal fun CustomAIAgentSettingsTab(
     onGoogleSheetIdInputChange: (String) -> Unit,
     onSetupClick: () -> Unit,
     onOpenAIDataFolderClick: () -> Unit,
+    onRefreshLocalSheetsClick: () -> Unit,
+    onCreateCustomFolderClick: (String) -> Unit,
+    onCreateLinkedWriteSheetClick: (String) -> Unit,
     onOpenCustomFolderClick: () -> Unit,
     onOpenGoogleSetupClick: () -> Unit
 ) {
     val tableMode = writeStorageMode == "TABLE_SHEET"
+    var folderMenuExpanded by remember { mutableStateOf(false) }
     var spreadsheetSourceMenuExpanded by remember { mutableStateOf(false) }
     var writeTargetSheetMenuExpanded by remember { mutableStateOf(false) }
+    var newFolderName by remember { mutableStateOf("") }
+    var newLinkedSheetName by remember { mutableStateOf("") }
     val effectiveConnectedGoogleSheetName = connectedGoogleSheetName.ifBlank { "No Google file connected" }
     val effectiveConnectedGoogleSheetId = connectedGoogleSheetId.ifBlank { "Not connected" }
     val effectiveSelectedTabName = selectedGoogleWriteSheetName.ifBlank { "No sheet tab selected" }
     val safeWriteSheetList =
         if (availableGoogleWriteSheetNames.isEmpty()) listOf("Select sheet from connection")
         else availableGoogleWriteSheetNames
+    val safeFolderList =
+        availableCustomSheetFolderNames
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinctBy { it.lowercase() }
+            .sortedBy { it.lowercase() }
+    val safeLocalWriteSheets =
+        availableLocalWriteSheetNames
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinctBy { it.lowercase() }
+            .sortedBy { it.lowercase() }
+    val localWriteSheetOptions = listOf("Use default AI write sheet") + safeLocalWriteSheets
+    val effectiveLinkedWriteSheetName =
+        linkedWriteSheetName.ifBlank { "Use default AI write sheet" }
     val selectedSpreadsheetOption =
         availableGoogleSpreadsheetOptions.find {
             it.ref.equals(selectedGoogleSpreadsheetRef.trim(), ignoreCase = true)
@@ -170,6 +198,240 @@ internal fun CustomAIAgentSettingsTab(
 
                 // Action cards
                 if (tableMode) {
+                    Text(
+                        "Linked TableSheet Folder",
+                        color = AccentBlue,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Box {
+                        SettingsTextField(
+                            value = customSheetFolderName.ifBlank { "Select or create folder in Settings" },
+                            onValueChange = {},
+                            label = "Folder",
+                            readOnly = true,
+                            accentColor = AccentBlue,
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Folder,
+                                    contentDescription = null,
+                                    tint = AccentBlue
+                                )
+                            },
+                            trailingIcon = {
+                                Icon(
+                                    Icons.Default.ArrowDropDown,
+                                    contentDescription = null,
+                                    tint = AccentBlue
+                                )
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = safeFolderList.isNotEmpty()) {
+                                    folderMenuExpanded = true
+                                }
+                        )
+                        DropdownMenu(
+                            expanded = folderMenuExpanded,
+                            onDismissRequest = { folderMenuExpanded = false },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFF1E293B))
+                        ) {
+                            safeFolderList.forEach { folder ->
+                                DropdownMenuItem(
+                                    text = { Text(folder, color = TextPrimary, fontSize = 14.sp) },
+                                    onClick = {
+                                        onCustomSheetFolderNameChange(folder)
+                                        folderMenuExpanded = false
+                                    },
+                                    modifier = Modifier.background(Color(0xFF1E293B))
+                                )
+                            }
+                        }
+                    }
+                    SettingsTextField(
+                        value = newFolderName,
+                        onValueChange = { newFolderName = it },
+                        label = "Create new folder",
+                        accentColor = AccentBlue,
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.CreateNewFolder,
+                                contentDescription = null,
+                                tint = AccentBlue
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                onCreateCustomFolderClick(newFolderName)
+                                newFolderName = ""
+                            },
+                            enabled = !setupInProgress && newFolderName.isNotBlank(),
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = AccentBlue.copy(0.2f),
+                                contentColor = AccentBlue
+                            )
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Create + Select", fontWeight = FontWeight.SemiBold)
+                        }
+                        OutlinedButton(
+                            onClick = onRefreshLocalSheetsClick,
+                            enabled = !setupInProgress,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentGreen),
+                            border = BorderStroke(1.dp, AccentGreen.copy(0.7f))
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Refresh", fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                    Text(
+                        if (customSheetFolderName.isBlank()) {
+                            "Step 1: yahin folder create/select karo. Step 2: neeche new sheet create + link karo ya TableSheet me manual sheet banao. Step 3: Write Fields me same fields add rakho taki AI mapped values likh sake."
+                        } else {
+                            "Default AI write/log sheet alag rahegi. Is selected folder me optional user-created sheet connect karoge to AI mapped fields usme bhi likhega."
+                        },
+                        color = TextSecondary,
+                        fontSize = 11.sp,
+                        lineHeight = 16.sp
+                    )
+
+                    Text(
+                        "Linked User Write Sheet (Optional)",
+                        color = AccentGreen,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Box {
+                        SettingsTextField(
+                            value = effectiveLinkedWriteSheetName,
+                            onValueChange = {},
+                            label = "Select existing TableSheet",
+                            readOnly = true,
+                            accentColor = AccentGreen,
+                            trailingIcon = {
+                                Icon(
+                                    Icons.Default.ArrowDropDown,
+                                    contentDescription = null,
+                                    tint = AccentGreen
+                                )
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = customSheetFolderName.isNotBlank()) {
+                                    writeTargetSheetMenuExpanded = true
+                                }
+                        )
+                        DropdownMenu(
+                            expanded = writeTargetSheetMenuExpanded,
+                            onDismissRequest = { writeTargetSheetMenuExpanded = false },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFF1E293B))
+                        ) {
+                            localWriteSheetOptions.forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(option, color = TextPrimary, fontSize = 14.sp) },
+                                    onClick = {
+                                        onLinkedWriteSheetNameChange(
+                                            option.takeIf { it != "Use default AI write sheet" }.orEmpty()
+                                        )
+                                        writeTargetSheetMenuExpanded = false
+                                    },
+                                    modifier = Modifier.background(Color(0xFF1E293B))
+                                )
+                            }
+                        }
+                    }
+
+                    if (customSheetFolderName.isBlank()) {
+                        Text(
+                            "Folder select/create karne ke baad hi linked user write sheet create ya connect hogi.",
+                            color = AccentAmber,
+                            fontSize = 11.sp,
+                            lineHeight = 16.sp
+                        )
+                    } else {
+                        if (safeLocalWriteSheets.isEmpty()) {
+                            Text(
+                                "Abhi is folder me koi linked user sheet nahi mili. Neeche new sheet create + link kar sakte ho, ya TableSheet me manually bana kar Refresh dabao.",
+                                color = AccentAmber,
+                                fontSize = 11.sp,
+                                lineHeight = 16.sp
+                            )
+                        }
+                        SettingsTextField(
+                            value = newLinkedSheetName,
+                            onValueChange = { newLinkedSheetName = it },
+                            label = "Create new linked write sheet",
+                            accentColor = AccentGreen,
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.TableChart,
+                                    contentDescription = null,
+                                    tint = AccentGreen
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Text(
+                            "Quick create current Write Fields ke naam se blank linked sheet banata hai. Agar custom columns manually set karne hain to Open Folder / Create Sheet use karo.",
+                            color = TextSecondary,
+                            fontSize = 11.sp,
+                            lineHeight = 16.sp
+                        )
+                        Button(
+                            onClick = {
+                                onCreateLinkedWriteSheetClick(newLinkedSheetName)
+                                newLinkedSheetName = ""
+                            },
+                            enabled = !setupInProgress && customSheetFolderName.isNotBlank() && newLinkedSheetName.isNotBlank(),
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = AccentGreen.copy(0.2f),
+                                contentColor = AccentGreen
+                            ),
+                            contentPadding = PaddingValues(vertical = 14.dp)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Create + Link Sheet", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
+                    }
+
+                    if (linkedWriteSheetName.isNotBlank()) {
+                        Text(
+                            "Connected sheet columns: ${linkedWriteSheetColumns.joinToString(", ").ifBlank { "No columns found" }}",
+                            color = TextSecondary,
+                            fontSize = 11.sp,
+                            lineHeight = 16.sp
+                        )
+                        Text(
+                            "Write Fields section me same fields add karo. AI connected sheet me sirf mapped/configured fields likhega; default AI sheet logging unchanged rahegi.",
+                            color = AccentGreen,
+                            fontSize = 11.sp,
+                            lineHeight = 16.sp
+                        )
+                    } else {
+                        Text(
+                            "Agar user-created sheet connect nahi karte ho to existing default custom write sheet behavior waise hi rahega.",
+                            color = TextSecondary,
+                            fontSize = 11.sp,
+                            lineHeight = 16.sp
+                        )
+                    }
+
                     ToolSetupActionCard(
                         icon = Icons.Default.Sync,
                         title = "Create / Refresh Sheet Structure",
@@ -490,8 +752,11 @@ internal fun CustomAIAgentSettingsTab(
                 if (tableMode) {
                     ToolSetupActionCard(
                         icon = Icons.Default.Folder,
-                        title = "Open Custom Write Folder",
-                        subtitle = customSheetFolderName.ifBlank { "Custom AI Agent folder" },
+                        title = "Open Folder / Create Sheet",
+                        subtitle =
+                            customSheetFolderName.ifBlank {
+                                "Select or create a folder above, then open it in TableSheet"
+                            },
                         accentColor = AccentAmber,
                         onClick = onOpenCustomFolderClick
                     )

@@ -201,6 +201,9 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
     var writeSheetName by rememberSaveable {
         mutableStateOf(settingsManager.customTemplateWriteSheetName)
     }
+    var linkedWriteSheetName by rememberSaveable {
+        mutableStateOf(settingsManager.customTemplateLinkedWriteSheetName)
+    }
     var salesSheetName by rememberSaveable {
         mutableStateOf(settingsManager.customTemplateSalesSheetName)
     }
@@ -240,6 +243,7 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
     var availableReferenceSheetNames by remember { mutableStateOf(listOf("All Sheets")) }
     var availableMatchFieldOptions by remember { mutableStateOf(listOf<String>()) }
     var sheetColumnSummaries by remember { mutableStateOf(listOf<SheetColumnSummary>()) }
+    var linkedWriteSheetColumns by remember { mutableStateOf(listOf<String>()) }
     var availableGoogleSpreadsheetOptions by remember { mutableStateOf(listOf<GoogleSpreadsheetOption>()) }
     var availableGoogleWriteSheetNames by remember { mutableStateOf(listOf<String>()) }
     var googleWriteSheetStatus by rememberSaveable { mutableStateOf("") }
@@ -263,6 +267,32 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
 
         settingsManager.customTemplateWriteFieldSchema = buildWriteFieldSchemaJson(cleanFields)
         settingsManager.customTemplateWriteSheetColumns = cleanFields.joinToString(",") { it.name }
+    }
+
+    fun resolveSheetColumns(sheetName: String): List<String> {
+        val cleanSheetName = sheetName.trim()
+        if (cleanSheetName.isBlank()) return emptyList()
+        return sheetColumnSummaries
+            .firstOrNull { it.sheetName.equals(cleanSheetName, ignoreCase = true) }
+            ?.columns
+            .orEmpty()
+    }
+
+    fun reconcileLinkedWriteSheetSelection(sheetNames: List<String>) {
+        val preferred =
+            linkedWriteSheetName.trim()
+                .ifBlank { settingsManager.customTemplateLinkedWriteSheetName.trim() }
+        val resolved =
+            when {
+                preferred.isBlank() -> ""
+                sheetNames.any { it.equals(preferred, ignoreCase = true) } ->
+                    sheetNames.first { it.equals(preferred, ignoreCase = true) }
+                else -> ""
+            }
+
+        linkedWriteSheetName = resolved
+        settingsManager.customTemplateLinkedWriteSheetName = resolved
+        linkedWriteSheetColumns = resolveSheetColumns(resolved)
     }
 
     suspend fun setupSheets(showSnackbar: Boolean) {
@@ -355,6 +385,9 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
             settingsManager.customTemplateReferenceSheetName = "All Sheets"
             availableMatchFieldOptions = emptyList()
             sheetColumnSummaries = emptyList()
+            linkedWriteSheetName = ""
+            settingsManager.customTemplateLinkedWriteSheetName = ""
+            linkedWriteSheetColumns = emptyList()
             return
         }
 
@@ -370,6 +403,7 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
 
         availableFolderSheetNames = sheetNames
         sheetColumnSummaries = collectSheetColumnSummaries(selectedFolder, sheetNames)
+        reconcileLinkedWriteSheetSelection(sheetNames)
 
         val fallbackReference =
             when {
@@ -516,6 +550,49 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
         settingsManager.customTemplateSheetFolderName = createdName
         syncSheetFolderOptions()
         snackbarHostState.showSnackbar("Linked folder: $createdName")
+    }
+
+    suspend fun createLinkedWriteSheet(rawSheetName: String) {
+        val cleanSheetName = rawSheetName.trim()
+        if (cleanSheetName.isBlank()) {
+            snackbarHostState.showSnackbar("Sheet name required")
+            return
+        }
+
+        val cleanFolderName =
+            sheetFolderName.trim().ifBlank { settingsManager.customTemplateSheetFolderName.trim() }
+        if (cleanFolderName.isBlank()) {
+            snackbarHostState.showSnackbar("Select or create a folder first")
+            return
+        }
+
+        val cleanFields =
+            writeFieldSpecs
+                .map { CustomWriteFieldSpec(it.name.trim(), normalizeWriteFieldType(it.type)) }
+                .filter { it.name.isNotBlank() }
+                .distinctBy { it.name.lowercase() }
+
+        persistWriteFields()
+
+        val createdName =
+            runCatching {
+                sheetManager.createLinkedWriteSheet(
+                    folderName = cleanFolderName,
+                    rawSheetName = cleanSheetName,
+                    fieldSpecs = cleanFields.map { it.name to it.type }
+                )
+            }
+                .onFailure { snackbarHostState.showSnackbar("Sheet create failed: ${it.message}") }
+                .getOrNull()
+                .orEmpty()
+
+        if (createdName.isBlank()) return
+
+        linkedWriteSheetName = createdName
+        settingsManager.customTemplateLinkedWriteSheetName = createdName
+        syncReferenceSheetOptions()
+        linkedWriteSheetColumns = resolveSheetColumns(createdName)
+        snackbarHostState.showSnackbar("Linked sheet ready: $createdName")
     }
 
     suspend fun refreshGoogleConnectionSummary() {
@@ -721,6 +798,7 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
                     customEnabled = settingsManager.activeTemplate.equals("CUSTOM", ignoreCase = true)
                     promptMode = settingsManager.customTemplatePromptMode
                     taskModeEnabled = settingsManager.customTemplateTaskModeEnabled
+                    linkedWriteSheetName = settingsManager.customTemplateLinkedWriteSheetName
                     autonomousSilenceGapMinutesText = settingsManager.customTemplateAutonomousSilenceGapMinutes.toString()
                     autonomousMaxNudgesPerDayText = settingsManager.customTemplateAutonomousMaxNudgesPerDay.toString()
                     autonomousMaxRoundsText = settingsManager.customTemplateAutonomousMaxRounds.toString()
@@ -848,8 +926,12 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
                             customEnabled = customEnabled,
                             setupInProgress = setupInProgress,
                             customSheetFolderName = sheetFolderName,
+                            availableCustomSheetFolderNames = availableSheetFolderNames,
                             referenceSheetName = referenceSheetName,
                             availableReferenceSheetNames = availableReferenceSheetNames,
+                            availableLocalWriteSheetNames = availableFolderSheetNames,
+                            linkedWriteSheetName = linkedWriteSheetName,
+                            linkedWriteSheetColumns = linkedWriteSheetColumns,
                             writeStorageMode = writeStorageMode,
                             writeFields = writeFieldSpecs.toList(),
                             writeFieldTypes = customWriteFieldTypes,
@@ -901,9 +983,23 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
                                 repeatCounterOwnerPhone = it
                                 settingsManager.customTemplateRepeatCounterOwnerPhone = it.trim()
                             },
+                            onCustomSheetFolderNameChange = { selectedFolder ->
+                                val resolvedFolder =
+                                    availableSheetFolderNames.firstOrNull {
+                                        it.equals(selectedFolder.trim(), ignoreCase = true)
+                                    } ?: selectedFolder.trim()
+                                sheetFolderName = resolvedFolder
+                                settingsManager.customTemplateSheetFolderName = resolvedFolder
+                                scope.launch { syncReferenceSheetOptions() }
+                            },
                             onReferenceSheetNameChange = { selected ->
                                 referenceSheetName = selected
                                 settingsManager.customTemplateReferenceSheetName = selected
+                            },
+                            onLinkedWriteSheetNameChange = { selected ->
+                                linkedWriteSheetName = selected.trim()
+                                settingsManager.customTemplateLinkedWriteSheetName = linkedWriteSheetName
+                                linkedWriteSheetColumns = resolveSheetColumns(linkedWriteSheetName)
                             },
                             onWriteStorageModeChange = { mode ->
                                 writeStorageMode = mode
@@ -994,6 +1090,18 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
                                         putExtra("openFolder", "AI Agent Data Sheet")
                                     }
                                 )
+                            },
+                            onRefreshLocalSheetsClick = {
+                                scope.launch {
+                                    syncSheetFolderOptions()
+                                    snackbarHostState.showSnackbar("TableSheet folders refreshed.")
+                                }
+                            },
+                            onCreateCustomFolderClick = { folderName ->
+                                scope.launch { createLinkedFolder(folderName) }
+                            },
+                            onCreateLinkedWriteSheetClick = { sheetName ->
+                                scope.launch { createLinkedWriteSheet(sheetName) }
                             },
                             onOpenCustomFolderClick = {
                                 val folderToOpen =

@@ -42,6 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
+import com.message.bulksend.bulksenderaiagent.AiAgentLaunchExtras
 import com.message.bulksend.contactmanager.Contact
 import com.message.bulksend.contactmanager.ContactsRepository
 import com.message.bulksend.contactmanager.ContactzActivity
@@ -86,6 +87,8 @@ class BulksendActivity : ComponentActivity() {
         val selectedGroupName = intent.getStringExtra("SELECTED_GROUP_NAME")
         val preCampaignName = intent.getStringExtra("CAMPAIGN_NAME")
         val preCountryCode = intent.getStringExtra("COUNTRY_CODE")
+        val preMessage = intent.getStringExtra(AiAgentLaunchExtras.EXTRA_PRESET_MESSAGE)
+        val preMediaUri = intent.getStringExtra(AiAgentLaunchExtras.EXTRA_PRESET_MEDIA_URI)
         
         android.util.Log.d("BulksendActivity", "GroupId: $selectedGroupId")
         android.util.Log.d("BulksendActivity", "CampaignName: $preCampaignName")
@@ -101,7 +104,9 @@ class BulksendActivity : ComponentActivity() {
                     preSelectedContactNames = selectedContactNames,
                     preSelectedGroupName = selectedGroupName,
                     preCampaignName = preCampaignName,
-                    preCountryCode = preCountryCode
+                    preCountryCode = preCountryCode,
+                    preMessage = preMessage,
+                    preMediaUri = preMediaUri
                 )
             }
         }
@@ -173,7 +178,9 @@ fun CampaignManagerScreen(
     preSelectedContactNames: ArrayList<String>? = null,
     preSelectedGroupName: String? = null,
     preCampaignName: String? = null,
-    preCountryCode: String? = null
+    preCountryCode: String? = null,
+    preMessage: String? = null,
+    preMediaUri: String? = null
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -190,8 +197,8 @@ fun CampaignManagerScreen(
 
     var campaignName by remember { mutableStateOf(preCampaignName ?: "") }
     var selectedGroup by remember { mutableStateOf<Group?>(null) }
-    var message by remember { mutableStateOf("") }
-    var mediaUri by remember { mutableStateOf<Uri?>(null) }
+    var message by remember { mutableStateOf(preMessage ?: "") }
+    var mediaUri by remember { mutableStateOf(preMediaUri?.let(Uri::parse)) }
     var isSending by remember { mutableStateOf(false) }
     var whatsAppPreference by remember { mutableStateOf("WhatsApp Business") }
     var campaignProgress by remember { mutableStateOf(0f) }
