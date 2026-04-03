@@ -49,8 +49,7 @@ class AutonomousGoalHeartbeatWorker(
 
             val replyManager = AIReplyManager(applicationContext)
             val selectedProvider = replyManager.getSelectedProvider()
-            val provider =
-                if (selectedProvider == AIProvider.CHATSPROMO) AIProvider.GEMINI else selectedProvider
+            val provider = selectedProvider
 
             val aiService = AIService(applicationContext)
             val sender = GlobalSenderAIIntegration(applicationContext)

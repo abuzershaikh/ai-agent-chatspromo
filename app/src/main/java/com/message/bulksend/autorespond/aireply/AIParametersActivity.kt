@@ -57,7 +57,7 @@ fun AIParametersScreen(provider: AIProvider, onBackPressed: () -> Unit) {
         topBar = {
             TopAppBar(
                 title = { 
-                    Text("AI Parameters", color = Color.White, fontWeight = FontWeight.Medium)
+                    Text("AI Agent Parameters", color = Color.White, fontWeight = FontWeight.Medium)
                 },
                 navigationIcon = {
                     IconButton(onClick = onBackPressed) {
@@ -118,7 +118,7 @@ fun AIParametersScreen(provider: AIProvider, onBackPressed: () -> Unit) {
                     Spacer(modifier = Modifier.height(12.dp))
                     
                     Text(
-                        "Control how detailed AI responses should be",
+                        "Control how detailed AI Agent responses should be",
                         fontSize = 14.sp,
                         color = Color(0xFF6B7280)
                     )

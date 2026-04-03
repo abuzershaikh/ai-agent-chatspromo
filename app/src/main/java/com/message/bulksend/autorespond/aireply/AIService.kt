@@ -67,6 +67,8 @@ class AIService(private val context: Context) {
     private val nativeSkillExecutor = NativeSkillExecutor(context, aiAgentSettings, needDiscoveryManager)
     private val paymentStatusWatcher = PaymentStatusEventWatcher.getInstance(context)
     private val toolOutcomeLearningManager = ToolOutcomeLearningManager(context)
+    private val chatsPromoGeminiService =
+        com.message.bulksend.autorespond.aireply.chatspromo.ChatsPromoGeminiService(context)
     
     // NEW: Message Handlers for cross-cutting concerns
     private val allMessageHandlers = listOf(
@@ -390,7 +392,9 @@ class AIService(private val context: Context) {
         if (!aiAgentSettings.activeTemplate.equals("CUSTOM", ignoreCase = true)) return false
         if (!aiAgentSettings.customTemplateNativeToolCallingEnabled) return false
         if (senderPhone.isBlank()) return false
-        return provider == AIProvider.CHATGPT || provider == AIProvider.GEMINI
+        return provider == AIProvider.CHATGPT ||
+            provider == AIProvider.GEMINI ||
+            provider == AIProvider.CHATSPROMO
     }
 
     private suspend fun callProviderWithNativeTools(
@@ -426,7 +430,26 @@ class AIService(private val context: Context) {
                         stepAllowlist = stepAllowlist
                     )
 
-                AIProvider.CHATSPROMO -> null
+                AIProvider.CHATSPROMO ->
+                    chatsPromoGeminiService.callGeminiWithNativeTools(
+                        config = config,
+                        prompt = prompt,
+                        stepAllowlist = stepAllowlist,
+                        maxTurns = aiAgentSettings.customTemplateAutonomousMaxRounds.coerceAtLeast(1),
+                        buildFunctionDeclarations = { allowlist ->
+                            nativeToolRegistry.buildGeminiFunctionDeclarations(allowlist)
+                        },
+                        executeFunction = { functionName, args ->
+                            executeNativeToolCall(
+                                functionName = functionName,
+                                args = args,
+                                senderPhone = senderPhone,
+                                senderName = senderName,
+                                userMessage = userMessage,
+                                stepAllowlist = stepAllowlist
+                            )
+                        }
+                    )
             }
         }.getOrElse {
             android.util.Log.e("AIService", "Native tool-call failed, falling back: ${it.message}")
@@ -909,11 +932,9 @@ class AIService(private val context: Context) {
         android.util.Log.d("AIService", "ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ generateReply STARTED")
         android.util.Log.d("AIService", "Provider: ${provider.displayName}, Sender: $senderName, Phone: $senderPhone")
         android.util.Log.d("AIService", "Message: $message")
+        var detectedIntent = "UNKNOWN"
         val config = configManager.getConfig(provider)
         android.util.Log.d("AIService", "Config loaded, API Key present: ${config.apiKey.isNotEmpty()}")
-
-        // Variable to store detected intent (accessible throughout function)
-        var detectedIntent = "UNKNOWN"
         val collectedToolSignals = mutableListOf<ToolExecutionSignal>()
         val collectedToolActions = linkedSetOf<String>()
         var usedNativeToolCalling = false
@@ -1050,7 +1071,8 @@ class AIService(private val context: Context) {
         val initialNativeResult =
             when (provider) {
                 AIProvider.CHATGPT,
-                AIProvider.GEMINI ->
+                AIProvider.GEMINI,
+                AIProvider.CHATSPROMO ->
                     callProviderWithNativeToolsDetailed(
                         provider = provider,
                         config = config,
@@ -1059,7 +1081,6 @@ class AIService(private val context: Context) {
                         senderName = senderName,
                         userMessage = message
                     )
-                AIProvider.CHATSPROMO -> null
             }
         if (initialNativeResult != null) {
             usedNativeToolCalling = true
@@ -1070,17 +1091,9 @@ class AIService(private val context: Context) {
         }
 
         val rawResponse = when (provider) {
-            AIProvider.CHATSPROMO -> {
-                val subscriptionManager = ChatsPromoAISubscriptionManager(context)
-                if (!subscriptionManager.canUseAI()) {
-                    return@withContext AIReplyResult(
-                        text = "SUBSCRIPTION_REQUIRED: Your trial has expired. Please subscribe to continue using ChatsPromo AI.",
-                        detectedIntent = detectedIntent
-                    )
-                }
-                val chatsPromoService = ChatsPromoAIService(context)
-                chatsPromoService.generateReply(message, senderName)
-            }
+            AIProvider.CHATSPROMO ->
+                initialNativeResult?.text?.takeIf { it.isNotBlank() }
+                    ?: chatsPromoGeminiService.generateReply(config, prompt)
             AIProvider.CHATGPT ->
                 initialNativeResult?.text?.takeIf { it.isNotBlank() } ?: callChatGPT(config, prompt)
             AIProvider.GEMINI ->
@@ -1128,8 +1141,7 @@ class AIService(private val context: Context) {
                 }
                 finalShouldStopChain = finalShouldStopChain || executionResult.shouldStopChain
                 val canContinueIteratively =
-                    provider != AIProvider.CHATSPROMO &&
-                        roundIndex < maxExecutionRounds - 1 &&
+                    roundIndex < maxExecutionRounds - 1 &&
                         !executionResult.shouldStopChain &&
                         !finalShouldStopChain &&
                         latestNewActions.isNotEmpty()
@@ -1150,7 +1162,8 @@ class AIService(private val context: Context) {
                 val followUpNativeResult =
                     when (provider) {
                         AIProvider.CHATGPT,
-                        AIProvider.GEMINI ->
+                        AIProvider.GEMINI,
+                        AIProvider.CHATSPROMO ->
                             callProviderWithNativeToolsDetailed(
                                 provider = provider,
                                 config = config,
@@ -1159,7 +1172,6 @@ class AIService(private val context: Context) {
                                 senderName = senderName,
                                 userMessage = message
                             )
-                        AIProvider.CHATSPROMO -> null
                     }
                 if (followUpNativeResult != null) {
                     usedNativeToolCalling = true
@@ -1178,7 +1190,9 @@ class AIService(private val context: Context) {
                         AIProvider.GEMINI ->
                             followUpNativeResult?.text?.takeIf { it.isNotBlank() }
                                 ?: callGemini(config, followUpPrompt)
-                        AIProvider.CHATSPROMO -> cleanedResponse
+                        AIProvider.CHATSPROMO ->
+                            followUpNativeResult?.text?.takeIf { it.isNotBlank() }
+                                ?: chatsPromoGeminiService.generateReply(config, followUpPrompt)
                     }
                 nextRoundResponse = cleanMarkdownFormatting(followUpRawResponse)
                 cleanedResponse = nextRoundResponse
@@ -1427,6 +1441,7 @@ class AIService(private val context: Context) {
             // Use Gemini for extraction as it's fast (or same provider)
             // Using same provider to respect user choice/key
             val response = when (provider) {
+                AIProvider.CHATSPROMO -> chatsPromoGeminiService.generateReply(config, extractionPrompt)
                 AIProvider.CHATGPT -> callChatGPT(config, extractionPrompt)
                 AIProvider.GEMINI -> callGemini(config, extractionPrompt)
                 else -> ""
@@ -1809,6 +1824,7 @@ class AIService(private val context: Context) {
             """.trimIndent()
 
             val rawResponse = when (provider) {
+                AIProvider.CHATSPROMO -> chatsPromoGeminiService.generateReply(config, prompt)
                 AIProvider.GEMINI -> callGemini(config, prompt)
                 AIProvider.CHATGPT -> callChatGPT(config, prompt)
                 else -> return null
@@ -1874,6 +1890,7 @@ class AIService(private val context: Context) {
 
         try {
             when (provider) {
+                AIProvider.CHATSPROMO -> chatsPromoGeminiService.generateReply(config, prompt)
                 AIProvider.GEMINI -> callGemini(config, prompt)
                 AIProvider.CHATGPT -> callChatGPT(config, prompt)
                 else -> "Reminder: $reminderContext at $dateTime (Provider: $provider)"

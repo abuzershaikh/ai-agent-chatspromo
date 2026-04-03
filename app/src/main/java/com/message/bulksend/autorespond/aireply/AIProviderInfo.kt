@@ -14,10 +14,10 @@ object AIProviderData {
         return when (provider) {
             AIProvider.CHATSPROMO -> AIProviderInfo(
                 name = "ChatsPromo AI",
-                description = "Built-in AI assistant - no API key required. Ready to use instantly!",
+                description = "Server-managed Gemini setup. User ko API key ya model change karne ki zarurat nahi hai.",
                 learnMoreUrl = "",
-                poweredBy = "Powered by ChatsPromo",
-                models = listOf("chatspromo-v1"),
+                poweredBy = "Powered by ChatsPromo Gemini",
+                models = listOf("Server Managed Gemini"),
                 apiKeyUrl = ""
             )
             AIProvider.CHATGPT -> AIProviderInfo(

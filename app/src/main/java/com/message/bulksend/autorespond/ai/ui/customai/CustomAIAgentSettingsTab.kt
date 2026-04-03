@@ -48,6 +48,7 @@ internal fun CustomAIAgentSettingsTab(
     setupInProgress: Boolean,
     customSheetFolderName: String,
     availableCustomSheetFolderNames: List<String>,
+    availableCustomSheetFolderCounts: Map<String, Int>,
     referenceSheetName: String,
     availableReferenceSheetNames: List<String>,
     availableLocalWriteSheetNames: List<String>,
@@ -88,7 +89,7 @@ internal fun CustomAIAgentSettingsTab(
     onSetupClick: () -> Unit,
     onOpenAIDataFolderClick: () -> Unit,
     onRefreshLocalSheetsClick: () -> Unit,
-    onCreateCustomFolderClick: (String) -> Unit,
+    onCreateCustomFolderClick: (String, String) -> Unit,
     onCreateLinkedWriteSheetClick: (String) -> Unit,
     onOpenCustomFolderClick: () -> Unit,
     onOpenGoogleSetupClick: () -> Unit
@@ -98,6 +99,7 @@ internal fun CustomAIAgentSettingsTab(
     var spreadsheetSourceMenuExpanded by remember { mutableStateOf(false) }
     var writeTargetSheetMenuExpanded by remember { mutableStateOf(false) }
     var newFolderName by remember { mutableStateOf("") }
+    var newFolderSheetName by remember { mutableStateOf("") }
     var newLinkedSheetName by remember { mutableStateOf("") }
     val effectiveConnectedGoogleSheetName = connectedGoogleSheetName.ifBlank { "No Google file connected" }
     val effectiveConnectedGoogleSheetId = connectedGoogleSheetId.ifBlank { "Not connected" }
@@ -111,6 +113,28 @@ internal fun CustomAIAgentSettingsTab(
             .filter { it.isNotBlank() }
             .distinctBy { it.lowercase() }
             .sortedBy { it.lowercase() }
+
+    fun resolveFolderSheetCount(folderName: String): Int {
+        val cleanName = folderName.trim()
+        if (cleanName.isBlank()) return 0
+        return availableCustomSheetFolderCounts.entries.firstOrNull {
+            it.key.equals(cleanName, ignoreCase = true)
+        }?.value ?: 0
+    }
+
+    fun formatFolderLabel(folderName: String): String {
+        val count = resolveFolderSheetCount(folderName)
+        val suffix = if (count == 1) "1 sheet" else "$count sheets"
+        return "$folderName ($suffix)"
+    }
+
+    val selectedFolderSheetCount = resolveFolderSheetCount(customSheetFolderName)
+    val effectiveFolderLabel =
+        customSheetFolderName.trim()
+            .takeIf { it.isNotBlank() }
+            ?.let(::formatFolderLabel)
+            ?: "Select existing folder"
+
     val safeLocalWriteSheets =
         availableLocalWriteSheetNames
             .map { it.trim() }
@@ -204,9 +228,50 @@ internal fun CustomAIAgentSettingsTab(
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold
                     )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(AccentBlue.copy(alpha = 0.10f))
+                            .border(1.dp, AccentBlue.copy(alpha = 0.22f), RoundedCornerShape(14.dp))
+                            .padding(12.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                "Step by step",
+                                color = AccentBlue,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                "1. Existing folder select karo, ya neeche new folder aur first sheet ka name bharo.",
+                                color = TextSecondary,
+                                fontSize = 11.sp,
+                                lineHeight = 16.sp
+                            )
+                            Text(
+                                "2. Create Folder + Sheet dabate hi folder select ho jayega aur pehli linked sheet saath me ban jayegi.",
+                                color = TextSecondary,
+                                fontSize = 11.sp,
+                                lineHeight = 16.sp
+                            )
+                            Text(
+                                "3. Dropdown me har folder ke saath kitni sheets hain woh bhi dikh raha hai.",
+                                color = TextSecondary,
+                                fontSize = 11.sp,
+                                lineHeight = 16.sp
+                            )
+                            Text(
+                                "4. Write Fields same rakho, phir Create / Refresh Sheet Structure se baaki AI sheets sync kar lo.",
+                                color = TextSecondary,
+                                fontSize = 11.sp,
+                                lineHeight = 16.sp
+                            )
+                        }
+                    }
                     Box {
                         SettingsTextField(
-                            value = customSheetFolderName.ifBlank { "Select or create folder in Settings" },
+                            value = effectiveFolderLabel,
                             onValueChange = {},
                             label = "Folder",
                             readOnly = true,
@@ -240,7 +305,13 @@ internal fun CustomAIAgentSettingsTab(
                         ) {
                             safeFolderList.forEach { folder ->
                                 DropdownMenuItem(
-                                    text = { Text(folder, color = TextPrimary, fontSize = 14.sp) },
+                                    text = {
+                                        Text(
+                                            formatFolderLabel(folder),
+                                            color = TextPrimary,
+                                            fontSize = 14.sp
+                                        )
+                                    },
                                     onClick = {
                                         onCustomSheetFolderNameChange(folder)
                                         folderMenuExpanded = false
@@ -264,16 +335,40 @@ internal fun CustomAIAgentSettingsTab(
                         },
                         modifier = Modifier.fillMaxWidth()
                     )
+                    SettingsTextField(
+                        value = newFolderSheetName,
+                        onValueChange = { newFolderSheetName = it },
+                        label = "First sheet name",
+                        accentColor = AccentGreen,
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.TableChart,
+                                contentDescription = null,
+                                tint = AccentGreen
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        "New folder banate hi ye first linked write sheet bhi create ho jayegi, isliye user ko alag se sheet banane ki zarurat nahi padegi.",
+                        color = TextSecondary,
+                        fontSize = 11.sp,
+                        lineHeight = 16.sp
+                    )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Button(
                             onClick = {
-                                onCreateCustomFolderClick(newFolderName)
+                                onCreateCustomFolderClick(newFolderName, newFolderSheetName)
                                 newFolderName = ""
+                                newFolderSheetName = ""
                             },
-                            enabled = !setupInProgress && newFolderName.isNotBlank(),
+                            enabled =
+                                !setupInProgress &&
+                                    newFolderName.isNotBlank() &&
+                                    newFolderSheetName.isNotBlank(),
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = AccentBlue.copy(0.2f),
@@ -282,7 +377,7 @@ internal fun CustomAIAgentSettingsTab(
                         ) {
                             Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Create + Select", fontWeight = FontWeight.SemiBold)
+                            Text("Create Folder + Sheet", fontWeight = FontWeight.SemiBold)
                         }
                         OutlinedButton(
                             onClick = onRefreshLocalSheetsClick,
@@ -298,9 +393,9 @@ internal fun CustomAIAgentSettingsTab(
                     }
                     Text(
                         if (customSheetFolderName.isBlank()) {
-                            "Step 1: yahin folder create/select karo. Step 2: neeche new sheet create + link karo ya TableSheet me manual sheet banao. Step 3: Write Fields me same fields add rakho taki AI mapped values likh sake."
+                            "Existing folder select kar sakte ho, ya naya folder banate waqt first sheet bhi saath me create hogi."
                         } else {
-                            "Default AI write/log sheet alag rahegi. Is selected folder me optional user-created sheet connect karoge to AI mapped fields usme bhi likhega."
+                            "Selected folder me $selectedFolderSheetCount ${if (selectedFolderSheetCount == 1) "sheet" else "sheets"} hain. Isi folder me existing sheet select kar sakte ho ya neeche nayi linked sheet add kar sakte ho."
                         },
                         color = TextSecondary,
                         fontSize = 11.sp,

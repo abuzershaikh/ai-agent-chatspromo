@@ -1,5 +1,6 @@
 package com.message.bulksend.aiagent
 
+import android.content.Intent
 import android.graphics.Color as AndroidColor
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -31,8 +32,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.message.bulksend.aiagent.screens.AIAgentSettingsScreen
+import com.message.bulksend.aiagent.screens.AIAgentProviderScreen
 import com.message.bulksend.aiagent.screens.AITemplatesScreen
 import com.message.bulksend.aiagent.screens.AgentHomeScreen
+import com.message.bulksend.autorespond.aireply.AIReplyActivity
 import com.message.bulksend.ui.theme.BulksendTestTheme
 
 class AIAgentDashboardActivity : ComponentActivity() {
@@ -51,6 +54,7 @@ class AIAgentDashboardActivity : ComponentActivity() {
 @Composable
 fun AIAgentDashboardScreen(onBackPressed: () -> Unit) {
     var selectedTab by remember { mutableStateOf(0) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     Box(modifier = Modifier.fillMaxSize()) {
         DottedCanvasBackground(modifier = Modifier.matchParentSize())
@@ -69,7 +73,13 @@ fun AIAgentDashboardScreen(onBackPressed: () -> Unit) {
                 when (selectedTab) {
                     0 -> AgentHomeScreen()
                     1 -> AITemplatesScreen()
-                    2 -> AIAgentSettingsScreen()
+                    2 ->
+                        AIAgentProviderScreen(
+                                onOpenProviderSetup = {
+                                    context.startActivity(Intent(context, AIReplyActivity::class.java))
+                                }
+                        )
+                    3 -> AIAgentSettingsScreen()
                 }
             }
         }
@@ -126,7 +136,8 @@ fun AIAgentTopBar(selectedTab: Int, onBackPressed: () -> Unit) {
             when (selectedTab) {
                 0 -> "Agent Tool"
                 1 -> "AI Templates"
-                2 -> "AI Settings"
+                2 -> "AI Provider"
+                3 -> "AI Settings"
                 else -> "AI Agent"
             }
 
@@ -169,6 +180,7 @@ fun AIAgentBottomNavigation(selectedTab: Int, onTabSelected: (Int) -> Unit) {
             listOf(
                     BottomNavItem(Icons.Outlined.Home, "Agent Home", Color(0xFFFF6B6B)),
                     BottomNavItem(Icons.Outlined.Dashboard, "Templates", Color(0xFF10B981)),
+                    BottomNavItem(Icons.Outlined.Tune, "Provider", Color(0xFFF59E0B)),
                     BottomNavItem(Icons.Outlined.Settings, "Settings", Color(0xFF6366F1))
             )
 
@@ -183,12 +195,13 @@ fun AIAgentBottomNavigation(selectedTab: Int, onTabSelected: (Int) -> Unit) {
                                 )
         ) {
             Row(
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 30.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically
             ) {
                 tabs.forEachIndexed { index, item ->
                     AIAgentBottomNavItem(
+                            modifier = Modifier.weight(1f),
                             item = item,
                             isSelected = selectedTab == index,
                             onClick = { onTabSelected(index) }
@@ -202,7 +215,12 @@ fun AIAgentBottomNavigation(selectedTab: Int, onTabSelected: (Int) -> Unit) {
 data class BottomNavItem(val icon: ImageVector, val label: String, val color: Color)
 
 @Composable
-fun AIAgentBottomNavItem(item: BottomNavItem, isSelected: Boolean, onClick: () -> Unit) {
+fun AIAgentBottomNavItem(
+        modifier: Modifier = Modifier,
+        item: BottomNavItem,
+        isSelected: Boolean,
+        onClick: () -> Unit
+) {
     val scale by
             animateFloatAsState(
                     targetValue = if (isSelected) 1.15f else 1f,
@@ -226,7 +244,7 @@ fun AIAgentBottomNavItem(item: BottomNavItem, isSelected: Boolean, onClick: () -
             )
 
     Card(
-            modifier = Modifier.width(85.dp).height(62.dp).scale(scale),
+            modifier = modifier.height(62.dp).scale(scale),
             shape = RoundedCornerShape(16.dp),
             colors =
                     CardDefaults.cardColors(

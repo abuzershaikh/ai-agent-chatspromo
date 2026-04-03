@@ -28,9 +28,10 @@ internal object SheetAgentInfo {
             FOLDER_SELECTION to
                 SectionInfo(
                     title = "Folder Selection",
-                    description = "Select an existing custom folder or create a new one.",
+                    description = "Select an existing custom folder or create a new one with a clear sheet structure.",
                     points =
                         listOf(
+                            "Folder dropdown shows how many sheets already exist inside each folder.",
                             "Open TableSheet to add sheets and columns inside the selected folder.",
                             "Refresh after creating or editing sheets so the agent gets the latest structure.",
                             "No custom folder means the agent falls back to the default flow."

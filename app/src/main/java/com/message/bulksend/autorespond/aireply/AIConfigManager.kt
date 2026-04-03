@@ -9,6 +9,10 @@ class AIConfigManager(context: Context) {
     private val gson = Gson()
 
     private fun normalizeModel(provider: AIProvider, model: String): String {
+        if (provider == AIProvider.CHATSPROMO) {
+            return provider.defaultModel
+        }
+
         if (provider != AIProvider.GEMINI) {
             return model
         }
@@ -65,14 +69,14 @@ class AIConfigManager(context: Context) {
         if (normalizedModel != savedModel) {
             prefs.edit().putString("${provider.name}_model", normalizedModel).apply()
         }
-        
-        // ChatsPromo AI doesn't need API key - it's built-in
-        val apiKey = if (provider == AIProvider.CHATSPROMO) {
-            "built-in"
-        } else {
-            prefs.getString("${provider.name}_api_key", "") ?: ""
-        }
-        
+
+        val apiKey =
+            if (provider == AIProvider.CHATSPROMO) {
+                "server-managed"
+            } else {
+                prefs.getString("${provider.name}_api_key", "") ?: ""
+            }
+
         return AIConfig(
             provider = provider,
             apiKey = apiKey,

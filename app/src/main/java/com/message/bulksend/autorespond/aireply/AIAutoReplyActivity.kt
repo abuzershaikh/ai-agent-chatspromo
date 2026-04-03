@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.content.Intent
 import android.widget.Toast
+import com.message.bulksend.autorespond.aireply.chatspromo.ChatsPromoGeminiService
 import com.message.bulksend.ui.theme.BulksendTestTheme
 import kotlinx.coroutines.launch
 
@@ -52,6 +53,7 @@ fun AIAutoReplyScreen(onBackPressed: () -> Unit) {
     val configManager = remember { AIConfigManager(context) }
     // DON'T cache AIService - create fresh instance for each test to get latest settings
     val replyManager = remember { AIReplyManager(context) }
+    val chatsPromoGeminiService = remember { ChatsPromoGeminiService(context) }
     val settingsManager = remember { com.message.bulksend.autorespond.settings.AutoReplySettingsManager(context) }
     val scope = rememberCoroutineScope()
     
@@ -103,13 +105,13 @@ fun AIAutoReplyScreen(onBackPressed: () -> Unit) {
         }
     }
     
-    val providers = listOf(AIProvider.GEMINI, AIProvider.CHATGPT)
+    val providers = listOf(AIProvider.CHATSPROMO, AIProvider.GEMINI, AIProvider.CHATGPT)
     
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { 
-                    Text("AI Auto Reply", color = Color.White, fontWeight = FontWeight.Medium)
+                    Text("AI Agent", color = Color.White, fontWeight = FontWeight.Medium)
                 },
                 navigationIcon = {
                     IconButton(onClick = onBackPressed) {
@@ -218,7 +220,7 @@ fun AIAutoReplyScreen(onBackPressed: () -> Unit) {
             Spacer(modifier = Modifier.height(12.dp))
             */
             
-            // AI Reply Status Card (Read-only - controlled from Settings)
+            // AI Agent Status Card (Read-only - controlled from Settings)
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -246,13 +248,13 @@ fun AIAutoReplyScreen(onBackPressed: () -> Unit) {
                     Spacer(modifier = Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            if (isEnabled) "AI Reply Active" else "AI Reply Inactive",
+                            if (isEnabled) "AI Agent Active" else "AI Agent Inactive",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
                         Text(
-                            if (isEnabled) "Automatically replying with AI" else "Go to Settings to enable",
+                            if (isEnabled) "Automatically replying with AI Agent" else "Go to Settings to enable",
                             fontSize = 14.sp,
                             color = Color.White.copy(alpha = 0.9f)
                         )
@@ -287,7 +289,11 @@ fun AIAutoReplyScreen(onBackPressed: () -> Unit) {
             ) {
                 providers.forEach { provider ->
                     val config = configManager.getConfig(provider)
-                    val isConfigured = config.apiKey.isNotEmpty()
+                    val isConfigured =
+                        when (provider) {
+                            AIProvider.CHATSPROMO -> chatsPromoGeminiService.hasWorkerEndpoint()
+                            else -> config.apiKey.isNotEmpty()
+                        }
                     
                     Card(
                         modifier = Modifier
@@ -387,7 +393,11 @@ fun AIAutoReplyScreen(onBackPressed: () -> Unit) {
             ActionCard(
                 icon = Icons.Default.Settings,
                 title = "Configure ${selectedProvider.displayName}",
-                description = "Setup API key and select model",
+                description =
+                    if (selectedProvider == AIProvider.CHATSPROMO)
+                        "Server-managed Gemini via worker"
+                    else
+                        "Setup API key and select model",
                 onClick = {
                     val intent = Intent(context, AIReplyActivity::class.java)
                     context.startActivity(intent)
@@ -396,9 +406,9 @@ fun AIAutoReplyScreen(onBackPressed: () -> Unit) {
             
             Spacer(modifier = Modifier.height(24.dp))
             
-            // Test AI Reply
+            // Test AI Agent
             Text(
-                "Test AI Reply",
+                "Test AI Agent",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF212121),
@@ -409,7 +419,7 @@ fun AIAutoReplyScreen(onBackPressed: () -> Unit) {
                 value = testMessage,
                 onValueChange = { testMessage = it },
                 label = { Text("Test Message") },
-                placeholder = { Text("Enter a message to test AI reply...") },
+                placeholder = { Text("Enter a message to test AI Agent...") },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 3,
                 colors = OutlinedTextFieldDefaults.colors(
@@ -428,7 +438,11 @@ fun AIAutoReplyScreen(onBackPressed: () -> Unit) {
                     }
                     
                     val config = configManager.getConfig(selectedProvider)
-                    if (config.apiKey.isEmpty()) {
+                    if (selectedProvider == AIProvider.CHATSPROMO && !chatsPromoGeminiService.hasWorkerEndpoint()) {
+                        Toast.makeText(context, "ChatsPromo worker URL not configured yet", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+                    if (selectedProvider != AIProvider.CHATSPROMO && config.apiKey.isEmpty()) {
                         Toast.makeText(context, "Please configure ${selectedProvider.displayName} first", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
@@ -469,7 +483,7 @@ fun AIAutoReplyScreen(onBackPressed: () -> Unit) {
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                 }
-                Text(if (isTesting) "Testing..." else "Test AI Reply")
+                Text(if (isTesting) "Testing..." else "Test AI Agent")
             }
             
             if (testResult.isNotEmpty()) {
@@ -482,7 +496,7 @@ fun AIAutoReplyScreen(onBackPressed: () -> Unit) {
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            "AI Response:",
+                            "AI Agent Response:",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF6B7280)

@@ -239,6 +239,7 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
 
     var setupInProgress by rememberSaveable { mutableStateOf(false) }
     var availableSheetFolderNames by remember { mutableStateOf(listOf<String>()) }
+    var availableSheetFolderCounts by remember { mutableStateOf(mapOf<String, Int>()) }
     var availableFolderSheetNames by remember { mutableStateOf(listOf<String>()) }
     var availableReferenceSheetNames by remember { mutableStateOf(listOf("All Sheets")) }
     var availableMatchFieldOptions by remember { mutableStateOf(listOf<String>()) }
@@ -512,9 +513,19 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
                 .mapNotNull { it.trim().takeIf { name -> name.isNotBlank() } }
                 .filterNot { it.equals(DEFAULT_LEGACY_AGENT_FOLDER, ignoreCase = true) }
                 .distinct()
-                .sorted()
+                .sortedBy { it.lowercase() }
+
+        val folderCounts =
+            folders.associateWith { folder ->
+                runCatching { sheetManager.listSheetNamesInFolder(folder) }
+                    .getOrElse { emptyList() }
+                    .mapNotNull { it.trim().takeIf { name -> name.isNotBlank() } }
+                    .distinctBy { it.lowercase() }
+                    .size
+            }
 
         availableSheetFolderNames = folders
+        availableSheetFolderCounts = folderCounts
 
         val preferred =
             sheetFolderName.trim().ifBlank { settingsManager.customTemplateSheetFolderName.trim() }
@@ -529,6 +540,53 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
         sheetFolderName = resolvedFolder
         settingsManager.customTemplateSheetFolderName = resolvedFolder
         syncReferenceSheetOptions()
+    }
+
+    suspend fun createLinkedFolderWithSheet(rawFolderName: String, rawSheetName: String) {
+        val cleanFolderName = rawFolderName.trim()
+        if (cleanFolderName.isBlank()) {
+            snackbarHostState.showSnackbar("Folder name required")
+            return
+        }
+
+        val cleanSheetName = rawSheetName.trim()
+        if (cleanSheetName.isBlank()) {
+            snackbarHostState.showSnackbar("First sheet name required")
+            return
+        }
+
+        val cleanFields =
+            writeFieldSpecs
+                .map { CustomWriteFieldSpec(it.name.trim(), normalizeWriteFieldType(it.type)) }
+                .filter { it.name.isNotBlank() }
+                .distinctBy { it.name.lowercase() }
+
+        persistWriteFields()
+
+        val createdResult =
+            runCatching {
+                val createdFolder = sheetManager.createFolderIfMissing(cleanFolderName)
+                val createdSheet =
+                    sheetManager.createLinkedWriteSheet(
+                        folderName = createdFolder,
+                        rawSheetName = cleanSheetName,
+                        fieldSpecs = cleanFields.map { it.name to it.type }
+                    )
+                createdFolder to createdSheet
+            }
+                .onFailure { snackbarHostState.showSnackbar("Folder + sheet create failed: ${it.message}") }
+                .getOrNull()
+
+        if (createdResult == null) return
+
+        val (createdFolder, createdSheet) = createdResult
+        sheetFolderName = createdFolder
+        settingsManager.customTemplateSheetFolderName = createdFolder
+        linkedWriteSheetName = createdSheet
+        settingsManager.customTemplateLinkedWriteSheetName = createdSheet
+        syncSheetFolderOptions()
+        linkedWriteSheetColumns = resolveSheetColumns(createdSheet)
+        snackbarHostState.showSnackbar("Folder ready with linked sheet: $createdFolder / $createdSheet")
     }
 
     suspend fun createLinkedFolder(rawFolderName: String) {
@@ -927,6 +985,7 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
                             setupInProgress = setupInProgress,
                             customSheetFolderName = sheetFolderName,
                             availableCustomSheetFolderNames = availableSheetFolderNames,
+                            availableCustomSheetFolderCounts = availableSheetFolderCounts,
                             referenceSheetName = referenceSheetName,
                             availableReferenceSheetNames = availableReferenceSheetNames,
                             availableLocalWriteSheetNames = availableFolderSheetNames,
@@ -1097,8 +1156,8 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
                                     snackbarHostState.showSnackbar("TableSheet folders refreshed.")
                                 }
                             },
-                            onCreateCustomFolderClick = { folderName ->
-                                scope.launch { createLinkedFolder(folderName) }
+                            onCreateCustomFolderClick = { folderName, firstSheetName ->
+                                scope.launch { createLinkedFolderWithSheet(folderName, firstSheetName) }
                             },
                             onCreateLinkedWriteSheetClick = { sheetName ->
                                 scope.launch { createLinkedWriteSheet(sheetName) }
@@ -1277,6 +1336,7 @@ internal fun CustomAIAgentScreen(onBack: () -> Unit) {
                     CustomAIAgentTab.SHEET ->                        CustomAIAgentSheetTab(
                             linkedFolderName = sheetFolderName,
                             availableFolderNames = availableSheetFolderNames,
+                            availableFolderSheetCounts = availableSheetFolderCounts,
                             availableReferenceSheetNames = availableReferenceSheetNames,
                             linkedReferenceSheetName = referenceSheetName,
                             linkedMatchFields = sheetMatchFields,

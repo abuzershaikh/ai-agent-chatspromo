@@ -212,11 +212,11 @@ fun AutoReplySettingsScreen(
                 color = Color(0xFF10B981)
             )
             
-            // AI Reply Setting
+            // AI Agent Setting
             SettingCard(
                 icon = Icons.Default.AutoAwesome,
-                title = "AI Reply",
-                description = "Use AI to generate smart replies",
+                title = "AI Agent",
+                description = "Use AI Agent to generate smart replies",
                 enabled = aiReplyEnabled,
                 onToggle = { newValue ->
                     checkPermissionsAndToggle(aiReplyEnabled) {
@@ -251,7 +251,7 @@ fun AutoReplySettingsScreen(
             
             PriorityCard(
                 title = "Keyword First",
-                description = "Try keyword, then spreadsheet, then AI if no match",
+                description = "Try keyword, then spreadsheet, then AI Agent if no match",
                 isSelected = replyPriority == ReplyPriority.KEYWORD_FIRST,
                 onClick = {
                     replyPriority = ReplyPriority.KEYWORD_FIRST
@@ -262,7 +262,7 @@ fun AutoReplySettingsScreen(
             
             PriorityCard(
                 title = "Spreadsheet First",
-                description = "Try spreadsheet, then keyword, then AI if no match",
+                description = "Try spreadsheet, then keyword, then AI Agent if no match",
                 isSelected = replyPriority == ReplyPriority.SPREADSHEET_FIRST,
                 onClick = {
                     replyPriority = ReplyPriority.SPREADSHEET_FIRST
@@ -272,8 +272,8 @@ fun AutoReplySettingsScreen(
             )
             
             PriorityCard(
-                title = "AI Only",
-                description = "Always use AI, ignore keyword and spreadsheet",
+                title = "AI Agent Only",
+                description = "Always use AI Agent, ignore keyword and spreadsheet",
                 isSelected = replyPriority == ReplyPriority.AI_ONLY,
                 onClick = {
                     replyPriority = ReplyPriority.AI_ONLY
@@ -330,9 +330,9 @@ fun AutoReplySettingsScreen(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            "• Keyword First: Keyword → Spreadsheet → AI\n" +
-                            "• Spreadsheet First: Spreadsheet → Keyword → AI\n" +
-                            "• AI Only: Always uses AI\n" +
+                            "• Keyword First: Keyword → Spreadsheet → AI Agent\n" +
+                            "• Spreadsheet First: Spreadsheet → Keyword → AI Agent\n" +
+                            "• AI Agent Only: Always uses AI Agent\n" +
                             "• Keyword Only: Only keywords\n" +
                             "• Spreadsheet Only: Only spreadsheet",
                             fontSize = 12.sp,

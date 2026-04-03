@@ -9,6 +9,16 @@ plugins {
     id("com.google.devtools.ksp") version "2.2.20-2.0.2"
 }
 
+fun escapedBuildConfigValue(raw: String): String {
+    return raw.replace("\\", "\\\\").replace("\"", "\\\"")
+}
+
+fun Project.readOptionalConfig(name: String): String {
+    return (findProperty(name) as String?)
+        ?: System.getenv(name)
+        ?: ""
+}
+
 android {
     signingConfigs {
         getByName("debug") {
@@ -30,6 +40,17 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         signingConfig = signingConfigs.getByName("debug")
+
+        buildConfigField(
+            "String",
+            "CHATSPROMO_WORKER_URL",
+            "\"${escapedBuildConfigValue(project.readOptionalConfig("CHATSPROMO_WORKER_URL"))}\""
+        )
+        buildConfigField(
+            "String",
+            "CHATSPROMO_WORKER_CLIENT_TOKEN",
+            "\"${escapedBuildConfigValue(project.readOptionalConfig("CHATSPROMO_WORKER_CLIENT_TOKEN"))}\""
+        )
     }
 
     buildTypes {

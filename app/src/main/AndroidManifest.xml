@@ -321,12 +321,12 @@
         <activity
             android:name=".autorespond.aireply.AIReplyActivity"
             android:exported="false"
-            android:label="AI Reply" />
+            android:label="AI Agent Setup" />
 
         <activity
             android:name=".autorespond.aireply.AIAutoReplyActivity"
             android:exported="false"
-            android:label="AI Auto Reply" />
+            android:label="AI Agent" />
 
         <activity
             android:name=".autorespond.settings.PermissionSetupActivity"
@@ -456,7 +456,7 @@
         <activity
             android:name=".autorespond.aireply.AIParametersActivity"
             android:exported="false"
-            android:label="AI Parameters" />
+            android:label="AI Agent Parameters" />
 
         <activity
             android:name=".autorespond.instareply.InstagramAutoReplyActivity"

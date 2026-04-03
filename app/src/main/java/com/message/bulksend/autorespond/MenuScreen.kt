@@ -90,8 +90,8 @@ fun MenuTabContent() {
     val replyOptionsLine2 = listOf(
         MenuOption(
             icon = Icons.Default.AutoAwesome,
-            title = "AI Reply",
-            description = "Smart AI auto-replies",
+            title = "AI Agent",
+            description = "Smart AI agent replies",
             color = Color(0xFF8B5CF6),
             onClick = {
                 val intent = android.content.Intent(context, com.message.bulksend.autorespond.aireply.AIAutoReplyActivity::class.java)

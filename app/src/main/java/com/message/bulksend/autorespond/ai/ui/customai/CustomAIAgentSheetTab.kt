@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.sp
 internal fun CustomAIAgentSheetTab(
     linkedFolderName: String,
     availableFolderNames: List<String>,
+    availableFolderSheetCounts: Map<String, Int>,
     availableReferenceSheetNames: List<String>,
     linkedReferenceSheetName: String,
     linkedMatchFields: String,
@@ -72,6 +73,27 @@ internal fun CustomAIAgentSheetTab(
             .filter { it.isNotBlank() }
             .distinctBy { it.lowercase() }
             .sorted()
+
+    fun resolveFolderSheetCount(folderName: String): Int {
+        val cleanName = folderName.trim()
+        if (cleanName.isBlank()) return 0
+        return availableFolderSheetCounts.entries.firstOrNull {
+            it.key.equals(cleanName, ignoreCase = true)
+        }?.value ?: 0
+    }
+
+    fun formatFolderLabel(folderName: String): String {
+        val count = resolveFolderSheetCount(folderName)
+        val suffix = if (count == 1) "1 sheet" else "$count sheets"
+        return "$folderName ($suffix)"
+    }
+
+    val selectedFolderLabel =
+        linkedFolderName.trim()
+            .takeIf { it.isNotBlank() }
+            ?.let(::formatFolderLabel)
+            ?: "Not selected (default active)"
+
     val safeReferences =
         if (availableReferenceSheetNames.isEmpty()) listOf("All Sheets")
         else availableReferenceSheetNames
@@ -128,7 +150,7 @@ internal fun CustomAIAgentSheetTab(
                         fontSize = 12.sp
                     )
                     Text(
-                        "Selected Folder: ${linkedFolderName.ifBlank { "Not selected (default active)" }}",
+                        "Selected Folder: $selectedFolderLabel",
                         color = Color(0xFFCBD5E1),
                         fontSize = 12.sp
                     )
@@ -181,15 +203,26 @@ internal fun CustomAIAgentSheetTab(
                     )
                     DropdownField(
                         label = "Custom Data Folder",
-                        value = linkedFolderName.ifBlank { "Select custom folder" },
+                        value = linkedFolderName.ifBlank { "Select custom folder" }.let {
+                            if (linkedFolderName.isBlank()) it else formatFolderLabel(linkedFolderName)
+                        },
                         expanded = folderMenuExpanded,
                         onExpandedChange = { folderMenuExpanded = it },
                         options = safeFolders,
+                        optionLabel = ::formatFolderLabel,
                         onSelect = {
                             onFolderNameChange(it)
                             folderMenuExpanded = false
                         }
                     )
+
+                    if (linkedFolderName.isNotBlank()) {
+                        Text(
+                            "Selected folder me abhi ${resolveFolderSheetCount(linkedFolderName)} ${if (resolveFolderSheetCount(linkedFolderName) == 1) "sheet" else "sheets"} hain.",
+                            color = Color(0xFF93C5FD),
+                            fontSize = 11.sp
+                        )
+                    }
 
                     OutlinedTextField(
                         value = newFolderName,
@@ -220,7 +253,7 @@ internal fun CustomAIAgentSheetTab(
 
                     if (safeFolders.isEmpty()) {
                         Text(
-                            "No custom folder exists yet. Create a folder, then add sheets inside it.",
+                            "No custom folder exists yet. Create one here, or use Settings tab to create folder + first sheet together.",
                             color = Color(0xFFFDE68A),
                             fontSize = 11.sp
                         )
@@ -440,6 +473,7 @@ private fun DropdownField(
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
     options: List<String>,
+    optionLabel: (String) -> String = { it },
     onSelect: (String) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -472,7 +506,7 @@ private fun DropdownField(
                 } else {
                     options.forEach { option ->
                         DropdownMenuItem(
-                            text = { Text(option) },
+                            text = { Text(optionLabel(option)) },
                             onClick = { onSelect(option) }
                         )
                     }

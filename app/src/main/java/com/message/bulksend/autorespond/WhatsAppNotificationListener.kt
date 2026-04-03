@@ -1931,7 +1931,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                 Log.d(TAG, "Generating AI reply with provider: ${provider.displayName}")
                 
                 // Check subscription for ChatsPromo AI provider
-                if (provider == com.message.bulksend.autorespond.aireply.AIProvider.CHATSPROMO) {
+                if (false && provider == com.message.bulksend.autorespond.aireply.AIProvider.CHATSPROMO) {
                     val subscriptionManager = com.message.bulksend.autorespond.aireply.ChatsPromoAISubscriptionManager(this)
                     
                     // Sync from Firestore and check subscription
